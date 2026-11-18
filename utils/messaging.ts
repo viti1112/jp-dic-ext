@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import type { AddToAnkiResult, AnkiCard } from './anki.ts';
 import type { LookupMatch } from './dictionary/lookup.ts';
 
 export interface LookupRequestMessage {
@@ -7,16 +8,25 @@ export interface LookupRequestMessage {
   cursorIndex: number;
 }
 
-/** Grows as more message types are added (e.g. an Anki-export request). */
-export type ExtensionMessage = LookupRequestMessage;
+export interface AddToAnkiRequestMessage {
+  type: 'addToAnki';
+  card: AnkiCard;
+}
+
+export type ExtensionMessage = LookupRequestMessage | AddToAnkiRequestMessage;
 
 export interface LookupResponseMessage {
   match: LookupMatch | null;
 }
 
+export interface AddToAnkiResponseMessage {
+  result: AddToAnkiResult;
+}
+
 /** One handler per `ExtensionMessage` variant's `type`, so adding a message type is additive here rather than a rewrite. */
 interface MessageHandlers {
   lookup: (text: string, cursorIndex: number) => Promise<LookupMatch | null>;
+  addToAnki: (card: AnkiCard) => Promise<AddToAnkiResult>;
 }
 
 /**
@@ -31,6 +41,13 @@ export async function requestLookup(text: string, cursorIndex: number): Promise<
   return response?.match ?? null;
 }
 
+/** Same not-ready-yet fallback as `requestLookup`, but AnkiConnect unreachable is itself a distinct, expected outcome - not the fallback path. */
+export async function requestAddToAnki(card: AnkiCard): Promise<AddToAnkiResult> {
+  const message: AddToAnkiRequestMessage = { type: 'addToAnki', card };
+  const response = (await browser.runtime.sendMessage(message)) as AddToAnkiResponseMessage | undefined;
+  return response?.result ?? { ok: false, reason: 'unreachable' };
+}
+
 /** Registers the background-side handler for every `ExtensionMessage` variant. */
 export function registerMessageHandlers(handlers: MessageHandlers): void {
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
@@ -41,6 +58,12 @@ export function registerMessageHandlers(handlers: MessageHandlers): void {
           .then((match) => sendResponse({ match } satisfies LookupResponseMessage))
           .catch(() => sendResponse({ match: null } satisfies LookupResponseMessage));
         return true; // keep the message channel open for the async sendResponse above
+      case 'addToAnki':
+        handlers
+          .addToAnki(message.card)
+          .then((result) => sendResponse({ result } satisfies AddToAnkiResponseMessage))
+          .catch(() => sendResponse({ result: { ok: false, reason: 'unreachable' } } satisfies AddToAnkiResponseMessage));
+        return true;
       default:
         return undefined;
     }
