@@ -1,0 +1,33 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project overview
+
+A Manifest V3 browser extension that provides contextual Japanese dictionary lookups (hover/Shift+hover over text on any page), built with WXT. Core pieces planned for this repo, beyond the current scaffold:
+
+- A JMdict-derived dictionary stored in IndexedDB, with a frequency list used to rank multiple meanings of the same word.
+- A deinflection engine (content/background logic) that does longest-match substring segmentation over Japanese text (no word boundaries) and validates candidate base forms against part-of-speech rules, rather than accepting any suffix match.
+- A content script that detects the word under the cursor, renders a lookup popup inside a Shadow DOM, and skips `<ruby>/<rt>` (furigana) nodes.
+- Export to Anki via the local AnkiConnect REST API (`http://127.0.0.1:8765`, already in `host_permissions`), plus an optional built-in mini-SRS stored in IndexedDB for users without Anki.
+- An options page (`chrome.storage`) for deck/model name, hotkey, and Anki vs. mini-SRS mode.
+
+## Commands
+
+- `npm run dev` — start the WXT dev server for Chrome (hot-reloads the unpacked extension).
+- `npm run dev:firefox` — same, targeting Firefox.
+- `npm run build` / `npm run build:firefox` — production build, output in `.output/<target>/`.
+- `npm run zip` / `npm run zip:firefox` — build and package into a distributable zip.
+- `npm run compile` — type-check the whole project (`tsc --noEmit`) without emitting; run this after any change since there is no test suite yet.
+
+There is no test runner configured yet (Vitest is planned once the deinflection engine is implemented).
+
+## Architecture
+
+This is a [WXT](https://wxt.dev) project (Vite-based MV3 framework, file-based entrypoints similar to Nuxt/Next).
+
+- **`entrypoints/`** — one file/folder per extension surface; WXT derives the manifest's `background`, `content_scripts`, and `action.default_popup` from what it finds here (`background.ts`, `content.ts`, `popup/`). Adding a new entrypoint (e.g. an options page) means adding a new file/folder here, not hand-editing the manifest.
+- **`wxt.config.ts`** — the single source of truth for `manifest.json` fields that aren't derived from entrypoints (name, `permissions`, `host_permissions`). AnkiConnect access is granted here via `host_permissions: ['http://127.0.0.1:8765/*']`; new cross-origin calls need their origin added here, not just in `fetch()` calls.
+- **`components/`** — shared UI helpers reused across entrypoints (currently just the starter `counter.ts`).
+- WXT auto-imports its own globals (`defineBackground`, `defineContentScript`, `browser`) inside `entrypoints/` — no explicit import needed, see `.wxt/types` after `wxt prepare` (runs automatically via the `postinstall` script) if a global's type isn't resolving.
+- Manifest target defaults to `chrome-mv3`; `-b firefox` flags switch the build target without touching source files.
