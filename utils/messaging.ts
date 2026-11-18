@@ -13,7 +13,11 @@ export interface AddToAnkiRequestMessage {
   card: AnkiCard;
 }
 
-export type ExtensionMessage = LookupRequestMessage | AddToAnkiRequestMessage;
+export interface GetDictionaryCountRequestMessage {
+  type: 'getDictionaryCount';
+}
+
+export type ExtensionMessage = LookupRequestMessage | AddToAnkiRequestMessage | GetDictionaryCountRequestMessage;
 
 export interface LookupResponseMessage {
   match: LookupMatch | null;
@@ -23,10 +27,15 @@ export interface AddToAnkiResponseMessage {
   result: AddToAnkiResult;
 }
 
+export interface GetDictionaryCountResponseMessage {
+  count: number;
+}
+
 /** One handler per `ExtensionMessage` variant's `type`, so adding a message type is additive here rather than a rewrite. */
 interface MessageHandlers {
   lookup: (text: string, cursorIndex: number) => Promise<LookupMatch | null>;
   addToAnki: (card: AnkiCard) => Promise<AddToAnkiResult>;
+  getDictionaryCount: () => Promise<number>;
 }
 
 /**
@@ -48,6 +57,18 @@ export async function requestAddToAnki(card: AnkiCard): Promise<AddToAnkiResult>
   return response?.result ?? { ok: false, reason: 'unreachable' };
 }
 
+/**
+ * Sent by the toolbar popup instead of opening its own IndexedDB connection
+ * - the background already has the (seeded) database open, so asking it
+ * avoids both a second connection and the race of reading the count from a
+ * fresh connection before the background's own `seedIfEmpty()` has finished.
+ */
+export async function requestDictionaryCount(): Promise<number | null> {
+  const message: GetDictionaryCountRequestMessage = { type: 'getDictionaryCount' };
+  const response = (await browser.runtime.sendMessage(message)) as GetDictionaryCountResponseMessage | undefined;
+  return response?.count ?? null;
+}
+
 /** Registers the background-side handler for every `ExtensionMessage` variant. */
 export function registerMessageHandlers(handlers: MessageHandlers): void {
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
@@ -63,6 +84,12 @@ export function registerMessageHandlers(handlers: MessageHandlers): void {
           .addToAnki(message.card)
           .then((result) => sendResponse({ result } satisfies AddToAnkiResponseMessage))
           .catch(() => sendResponse({ result: { ok: false, reason: 'unreachable' } } satisfies AddToAnkiResponseMessage));
+        return true;
+      case 'getDictionaryCount':
+        handlers
+          .getDictionaryCount()
+          .then((count) => sendResponse({ count } satisfies GetDictionaryCountResponseMessage))
+          .catch(() => sendResponse({ count: 0 } satisfies GetDictionaryCountResponseMessage));
         return true;
       default:
         return undefined;

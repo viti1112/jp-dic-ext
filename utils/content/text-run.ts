@@ -28,3 +28,16 @@ export function extractTextRun(node: Node, offset: number): TextRun | null {
 
   return { text, cursorIndex: offset };
 }
+
+const INTERACTIVE_SELECTOR = 'a, button, input, textarea, select, [contenteditable], [role="button"], [role="link"]';
+
+/**
+ * True if `target` is, or sits inside, a native-interactive element. Used to
+ * make sure "click a matched word to pin the dictionary popup" never
+ * hijacks a click that was actually meant for a link, button, or form field
+ * the matched Japanese text happens to be inside of.
+ */
+export function isInteractiveElement(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest(INTERACTIVE_SELECTOR) !== null;
+}

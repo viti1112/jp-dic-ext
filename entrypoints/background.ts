@@ -1,3 +1,4 @@
+import { appendAnkiLog } from '@/utils/anki-log.ts';
 import { addNoteToAnki } from '@/utils/anki.ts';
 import { openDictionaryDB, seedIfEmpty } from '@/utils/dictionary/db.ts';
 import { lookupAtCursor } from '@/utils/dictionary/lookup.ts';
@@ -10,6 +11,21 @@ export default defineBackground(async () => {
 
   registerMessageHandlers({
     lookup: (text, cursorIndex) => lookupAtCursor(db, text, cursorIndex),
-    addToAnki: (card) => addNoteToAnki(card),
+    getDictionaryCount: () => db.count('entries'),
+    addToAnki: async (card) => {
+      const result = await addNoteToAnki(card);
+      if (result.ok) {
+        // A logging failure must never mask a successful Anki add - the
+        // note already exists in Anki either way, and the caller (the
+        // popup's "+Anki" button) treats any rejection here as a reason to
+        // let the user retry, which would create a duplicate note.
+        try {
+          await appendAnkiLog(card.fields.Front ?? '');
+        } catch (error) {
+          console.error('Failed to append to the Anki log (note was still added successfully):', error);
+        }
+      }
+      return result;
+    },
   });
 });

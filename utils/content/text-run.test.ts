@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { extractTextRun, isInsideRubyText } from './text-run.ts';
+import { extractTextRun, isInsideRubyText, isInteractiveElement } from './text-run.ts';
 
 describe('isInsideRubyText', () => {
   it('is false for a plain text node', () => {
@@ -45,5 +45,37 @@ describe('extractTextRun', () => {
     const textNode = document.querySelector('p')!.firstChild!;
     expect(extractTextRun(textNode, 99)).toBeNull();
     expect(extractTextRun(textNode, -1)).toBeNull();
+  });
+});
+
+describe('isInteractiveElement', () => {
+  it('is false for plain text', () => {
+    document.body.innerHTML = '<p id="t">読む</p>';
+    expect(isInteractiveElement(document.getElementById('t'))).toBe(false);
+  });
+
+  it.each(['a', 'button', 'input', 'textarea', 'select'])('is true for a %s element', (tag) => {
+    document.body.innerHTML = `<${tag} id="t"></${tag}>`;
+    expect(isInteractiveElement(document.getElementById('t'))).toBe(true);
+  });
+
+  it('is true for text nested inside a link, not just the link itself', () => {
+    document.body.innerHTML = '<a href="#"><span id="t">読む</span></a>';
+    expect(isInteractiveElement(document.getElementById('t'))).toBe(true);
+  });
+
+  it('is true for [role="button"] and [contenteditable]', () => {
+    document.body.innerHTML = '<div id="a" role="button"></div><div id="b" contenteditable="true"></div>';
+    expect(isInteractiveElement(document.getElementById('a'))).toBe(true);
+    expect(isInteractiveElement(document.getElementById('b'))).toBe(true);
+  });
+
+  it('is false for a non-Element target (e.g. a text node)', () => {
+    document.body.innerHTML = '<p>読む</p>';
+    expect(isInteractiveElement(document.querySelector('p')!.firstChild)).toBe(false);
+  });
+
+  it('is false for null', () => {
+    expect(isInteractiveElement(null)).toBe(false);
   });
 });

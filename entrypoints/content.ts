@@ -1,6 +1,9 @@
 import { LookupPopup } from '@/components/lookup-popup.ts';
-import { extractTextRun } from '@/utils/content/text-run.ts';
-import { requestLookup } from '@/utils/messaging.ts';
+import { basicCardFromEntry } from '@/utils/anki.ts';
+import { extractTextRun, isInteractiveElement } from '@/utils/content/text-run.ts';
+import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
+import { requestAddToAnki, requestLookup } from '@/utils/messaging.ts';
+import { getSettings, isActivationHeld, onSettingsChanged } from '@/utils/settings.ts';
 
 const THROTTLE_MS = 60;
 
@@ -14,23 +17,37 @@ const SUPPORTS_CARET_RANGE_FROM_POINT = typeof document.caretRangeFromPoint === 
 
 export default defineContentScript({
   matches: ['*://*/*'],
-  main() {
+  async main() {
     if (!SUPPORTS_CARET_RANGE_FROM_POINT) return;
 
-    const popup = new LookupPopup();
+    let settings = await getSettings();
+    onSettingsChanged((next) => {
+      settings = next;
+    });
+
+    const popup = new LookupPopup((entry) => requestAddToAnki(basicCardFromEntry(entry, settings.deckName)));
+    let currentMatch: LookupMatch | null = null;
     let throttled = false;
     let lastRequestKey = '';
     // Guards against a slower, now-stale lookup response overwriting a
     // newer one if the user moves on before the first one resolves.
     let latestRequestId = 0;
 
+    // The only place that hides the popup - always goes through here (never
+    // `popup.hide()` directly) so `currentMatch` can never go stale while the
+    // popup is hidden. A stale non-null `currentMatch` combined with a
+    // hidden popup is exactly the state that previously let a click pin an
+    // invisible popup stuck that way until Escape.
     function hide() {
       popup.hide();
+      currentMatch = null;
       lastRequestKey = '';
     }
 
     document.addEventListener('mousemove', (event) => {
-      if (!event.shiftKey) {
+      if (popup.isPinned()) return; // frozen on the pinned word until Escape
+
+      if (!isActivationHeld(settings.activationMode, event)) {
         hide();
         return;
       }
@@ -63,6 +80,7 @@ export default defineContentScript({
       requestLookup(run.text, run.cursorIndex)
         .then((match) => {
           if (requestId !== latestRequestId) return; // a newer request has since superseded this one
+          currentMatch = match;
           if (match) {
             popup.show(match, event.clientX, event.clientY);
           } else {
@@ -70,8 +88,30 @@ export default defineContentScript({
           }
         })
         .catch(() => {
-          if (requestId === latestRequestId) popup.hide();
+          if (requestId === latestRequestId) hide();
         });
+    });
+
+    // Clicking a matched word pins the popup open so its "+Anki" buttons
+    // become clickable; clicks on the (already-interactive) popup itself are
+    // handled by its own buttons and never reach here (they stopPropagation).
+    // Never hijacks a click on a link/button/form field the matched text
+    // happens to sit inside of - that's a normal page click, not a pin.
+    document.addEventListener('click', (event) => {
+      if (popup.isPinned()) return;
+      if (!isActivationHeld(settings.activationMode, event)) return;
+      if (!currentMatch) return;
+      if (isInteractiveElement(event.target)) return;
+
+      popup.pin();
+      event.preventDefault();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && popup.isPinned()) {
+        popup.unpin();
+        currentMatch = null;
+      }
     });
   },
 });
