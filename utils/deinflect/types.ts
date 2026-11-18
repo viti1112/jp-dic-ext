@@ -26,6 +26,14 @@ export interface DeinflectCandidate {
    * so the sentinel doesn't need to be special-cased at every call site.
    */
   tags: PosTag[];
-  /** Chain of rule names applied, most-recently-applied (outermost) first. */
+  /**
+   * Chain of rule names applied, in the order the deinflection recursion
+   * matched them — the rule matched deepest in the recursion (closest to
+   * `term`, i.e. grammatically closest to the original dictionary root)
+   * comes first, and the rule matched at depth 0 (the outermost suffix on
+   * the original surface text) comes last. E.g. for 食べさせられない
+   * (causative+passive+negative of 食べる), this is
+   * `["causative", "potential-or-passive", "negative"]`.
+   */
   reasons: string[];
 }

@@ -14,8 +14,9 @@ const DB_VERSION = 1;
 
 export type DictionaryDB = IDBPDatabase<DictionarySchema>;
 
-export async function openDictionaryDB(): Promise<DictionaryDB> {
-  return openDB<DictionarySchema>(DB_NAME, DB_VERSION, {
+/** `dbName` defaults to the real extension database; tests pass a unique name per test to avoid cross-test pollution. */
+export async function openDictionaryDB(dbName = DB_NAME): Promise<DictionaryDB> {
+  return openDB<DictionarySchema>(dbName, DB_VERSION, {
     upgrade(db) {
       const store = db.createObjectStore('entries', { keyPath: 'id' });
       store.createIndex('kanji', 'kanji', { multiEntry: true });
