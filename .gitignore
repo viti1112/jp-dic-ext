@@ -14,6 +14,11 @@ stats-*.json
 .wxt
 web-ext.config.ts
 
+# Claude Code's own local session state (worktrees for background agent
+# tasks - see vitest.config.ts's exclude too -, launch.json, lock files);
+# never this repo's own tracked content.
+.claude
+
 # Generated/downloaded dictionary data (regenerate with `npm run build:dictionary`;
 # see CLAUDE.md for where the raw JMdict source comes from)
 data
