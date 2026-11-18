@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import type { DictionaryEntry, Sense } from './types.ts';
+import type { DictionaryEntry, Sense } from '../../utils/dictionary/types.ts';
 
 const SRC = process.argv[2] ?? 'data/raw/JMdict_e';
 const OUT_DICTIONARY = process.argv[3] ?? 'public/dictionary/jmdict-en.json';
