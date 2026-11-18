@@ -20,7 +20,7 @@ A Manifest V3 browser extension that provides contextual Japanese dictionary loo
 - `npm run zip` / `npm run zip:firefox` — build and package into a distributable zip.
 - `npm run compile` — type-check the whole project (`tsc --noEmit`) without emitting; run this after any change since there is no test suite yet.
 
-- `npm run build:dictionary` — regenerate `public/dictionary/jmdict-en.json` (and `data/pos-tags.json`) from the raw JMdict XML. Requires `data/raw/JMdict_e` to exist first: download it from `http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz` (EDRDG, open licence — attribution still needed in the README once published) and `gunzip` it into `data/raw/`. Both `data/` and `public/dictionary/` are gitignored — they're regenerated from source, not committed, because the parsed dictionary alone is ~40 MB.
+- `npm run build:dictionary` — regenerate `public/dictionary/jmdict-en.json` (and `data/pos-tags.json`) from the raw JMdict XML. Requires `data/raw/JMdict_e` to exist first: download it from `http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz` (EDRDG, open licence — attribution still needed in the README once published) and `gunzip` it into `data/raw/`. Both `data/` and `public/dictionary/` are gitignored — they're regenerated from source, not committed, because the parsed dictionary alone is ~40 MB. **On a fresh clone, run this before `npm run compile`/`dev`/`build`**: WXT's `getURL()` typing (`PublicPath`) is generated from whatever actually exists under `public/` at `wxt prepare` time, so referencing `/dictionary/jmdict-en.json` type-checks only after the file exists and `wxt prepare` (or `npx wxt prepare` directly) has re-run.
 
 There is no test runner configured yet (Vitest is planned once the deinflection engine is implemented).
 
