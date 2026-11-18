@@ -1,6 +1,7 @@
 import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
+import { speakJapanese } from '@/utils/tts.ts';
 
 const POPUP_STYLES = `
   :host { all: initial; }
@@ -35,6 +36,16 @@ const POPUP_STYLES = `
     padding: 3px 8px;
   }
   .add-btn:disabled { opacity: 0.6; cursor: default; }
+  .speak-btn {
+    pointer-events: auto;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #9ad1ff;
+    font-size: 13px;
+    padding: 0 4px;
+    line-height: 1;
+  }
 `;
 
 /**
@@ -154,6 +165,11 @@ function renderEntry(
     entryEl.append(readingEl);
   }
 
+  // Speak the kana reading, not the kanji headword - a kanji can have
+  // several readings, so the reading is the one unambiguous source of
+  // pronunciation here (entryDisplayFields falls back to the headword
+  // itself only for the rare entry with no reading at all).
+  entryEl.append(renderSpeakButton(reading || entryHeadword));
   entryEl.append(renderAddButton(entry, getButtonLabel, onAdd));
 
   for (const sense of entry.senses.slice(0, MAX_SENSES_PER_ENTRY)) {
@@ -169,6 +185,21 @@ function renderEntry(
   }
 
   return entryEl;
+}
+
+function renderSpeakButton(text: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'speak-btn';
+  button.title = 'Озвучить';
+  button.textContent = '\u{1F50A}'; // 🔊
+
+  button.addEventListener('click', (event) => {
+    event.stopPropagation(); // same reason as the add-card button: don't let this double as a pin-click
+    speakJapanese(text);
+  });
+
+  return button;
 }
 
 function renderAddButton(entry: DictionaryEntry, getButtonLabel: () => string, onAdd: AddCardHandler): HTMLButtonElement {

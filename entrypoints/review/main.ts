@@ -1,6 +1,7 @@
 import './style.css';
 import { requestDueSrsCards, requestReviewSrsCard } from '@/utils/messaging.ts';
 import type { ReviewQuality, SrsCard } from '@/utils/srs/types.ts';
+import { speakJapanese } from '@/utils/tts.ts';
 
 const BATCH_SIZE = 20;
 
@@ -47,7 +48,7 @@ function renderCard(): void {
   content.innerHTML = `
     <div class="progress">Осталось: ${queue.length}</div>
     <div class="card">
-      <div class="headword">${escapeHtml(card.headword)}</div>
+      <div class="headword">${escapeHtml(card.headword)} <button type="button" class="speak-btn" id="speak" title="Озвучить">\u{1F50A}</button></div>
       ${revealed ? `<div class="reading">${escapeHtml(card.reading)}</div>` : ''}
       ${revealed ? `<div class="glosses">${escapeHtml(card.glosses)}</div>` : ''}
       ${
@@ -62,6 +63,10 @@ function renderCard(): void {
       }
     </div>
   `;
+
+  document.querySelector<HTMLButtonElement>('#speak')!.addEventListener('click', () => {
+    speakJapanese(card.reading || card.headword);
+  });
 
   if (!revealed) {
     document.querySelector<HTMLButtonElement>('#reveal')!.addEventListener('click', () => {

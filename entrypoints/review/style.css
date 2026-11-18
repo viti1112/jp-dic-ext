@@ -76,6 +76,14 @@ body {
   font-size: 16px;
 }
 
+.speak-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-size: 22px;
+  vertical-align: middle;
+}
+
 .glosses {
   margin-top: 12px;
   font-size: 16px;
