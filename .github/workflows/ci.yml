@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm ci
+      # The real dictionary isn't committed (see CLAUDE.md): npm run test
+      # itself doesn't need it (every utils/dictionary/*.test.ts seeds a
+      # tiny fixture instead), but npm run compile does - entrypoints/
+      # background.ts calls browser.runtime.getURL('/dictionary/jmdict-en.json'),
+      # and WXT only generates a PublicPath type covering that literal once
+      # the file actually exists under public/ and `wxt prepare` has re-run
+      # (confirmed locally: compile fails with a PublicPath type error
+      # without this step, even though nothing in the test suite itself
+      # touches the file).
+      - name: Fetch JMdict and build the dictionary
+        run: |
+          mkdir -p data/raw
+          curl -sL -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+          gunzip data/raw/JMdict_e.gz
+          npm run build:dictionary
+          npx wxt prepare
+      - run: npm run compile
+      - run: npm run test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm ci
+      - name: Fetch JMdict and build the dictionary
+        run: |
+          mkdir -p data/raw
+          curl -sL -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+          gunzip data/raw/JMdict_e.gz
+          npm run build:dictionary
+      - run: npm run build
