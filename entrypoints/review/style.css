@@ -1,0 +1,139 @@
+:root {
+  --accent: #b68235;
+  --ink: #201f1d;
+  --muted: #605d5d;
+  --bg: #f7f5f2;
+  --border: rgba(32, 31, 29, 0.1);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 'Lora', Georgia, serif;
+}
+
+.page {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 40px 32px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.headword {
+  font-family: 'Cormorant Garamond', Garamond, serif;
+  font-size: 40px;
+  font-weight: 600;
+}
+
+.reading {
+  color: var(--accent);
+  font-size: 16px;
+}
+
+.glosses {
+  margin-top: 12px;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.progress {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.reveal-btn {
+  margin-top: 20px;
+  padding: 8px 20px;
+  font: 14px 'Lora', serif;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rate-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.rate-btn {
+  flex: 1;
+  padding: 10px 4px;
+  font: 13px 'Lora', serif;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rate-btn[data-quality='again'] {
+  background: #b5503f;
+}
+
+.rate-btn[data-quality='hard'] {
+  background: #c08a3e;
+}
+
+.rate-btn[data-quality='good'] {
+  background: #5a8f5e;
+}
+
+.rate-btn[data-quality='easy'] {
+  background: #4a7fb5;
+}
+
+.empty-state {
+  color: var(--muted);
+  font-style: italic;
+  padding: 40px 0;
+}
