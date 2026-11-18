@@ -1,3 +1,4 @@
+import { entryDisplayFields } from './dictionary/display.ts';
 import type { DictionaryEntry } from './dictionary/types.ts';
 
 const ANKI_CONNECT_URL = 'http://127.0.0.1:8765';
@@ -78,19 +79,15 @@ export async function pingAnkiConnect(): Promise<boolean> {
  * pick a different note type.
  */
 export function basicCardFromEntry(entry: DictionaryEntry, deckName: string, modelName = 'Basic'): AnkiCard {
-  const headword = entry.kanji[0] ?? entry.readings[0] ?? '';
-  const reading = entry.kanji[0] ? entry.readings[0] : undefined;
-  const glosses = entry.senses
-    .slice(0, 3)
-    .map((sense) => sense.glosses.join('; '))
-    .join('<br>');
+  const { headword, reading, glosses } = entryDisplayFields(entry);
+  const front = entry.kanji[0] && reading ? `${headword} (${reading})` : headword;
 
   return {
     deckName,
     modelName,
     fields: {
-      Front: reading ? `${headword} (${reading})` : headword,
-      Back: glosses,
+      Front: front,
+      Back: glosses.join('<br>'),
     },
   };
 }

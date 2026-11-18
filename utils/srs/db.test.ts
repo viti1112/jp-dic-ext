@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { addCardIfNew, countDueCards, getDueCards, openSrsDB, updateCard, type SrsDB } from './db.ts';
+import { addCardIfNew, countDueCards, getDueCards, openSrsDB, reviewCardById, updateCard, type SrsDB } from './db.ts';
 import { createCard, reviewCard } from './scheduler.ts';
 
 const NOW = 1_700_000_000_000;
@@ -78,5 +78,30 @@ describe('updateCard', () => {
     expect(stored?.repetitions).toBe(reviewed.repetitions);
     expect(stored?.easeFactor).toBeCloseTo(reviewed.easeFactor, 5);
     expect(stored?.dueAt).toBe(reviewed.dueAt);
+  });
+});
+
+describe('reviewCardById', () => {
+  it('reads, scores, and persists the review, returning the updated card', async () => {
+    const card = await addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW));
+    const reviewed = await reviewCardById(db, card.id, 'good', NOW);
+
+    expect(reviewed?.repetitions).toBe(1);
+    expect(reviewed?.intervalDays).toBe(1);
+    const stored = await db.get('cards', card.id);
+    expect(stored?.repetitions).toBe(1);
+  });
+
+  it('returns null for a card id that does not exist, without throwing', async () => {
+    await expect(reviewCardById(db, 999, 'good', NOW)).resolves.toBeNull();
+  });
+
+  it('two reviews in a row each see the previous one\'s effect (no lost update)', async () => {
+    const card = await addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW));
+    await reviewCardById(db, card.id, 'good', NOW); // repetitions 0 -> 1, interval 1
+    const second = await reviewCardById(db, card.id, 'good', NOW); // repetitions 1 -> 2, interval 6
+
+    expect(second?.repetitions).toBe(2);
+    expect(second?.intervalDays).toBe(6);
   });
 });

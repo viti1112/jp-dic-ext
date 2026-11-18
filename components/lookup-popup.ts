@@ -1,4 +1,4 @@
-import type { AddToAnkiResult } from '@/utils/anki.ts';
+import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
 
@@ -37,7 +37,18 @@ const POPUP_STYLES = `
   .add-btn:disabled { opacity: 0.6; cursor: default; }
 `;
 
-type AddToAnkiHandler = (entry: DictionaryEntry) => Promise<AddToAnkiResult>;
+/**
+ * Backend-agnostic outcome of "add this entry to whatever review system is
+ * active" (Anki or the mini-SRS) - the popup only needs to know whether it
+ * worked and, if not, what to show as the error tooltip. Each backend maps
+ * its own richer result/error type down to this shape in entrypoints/content.ts.
+ */
+export interface AddCardOutcome {
+  ok: boolean;
+  message?: string;
+}
+
+type AddCardHandler = (entry: DictionaryEntry) => Promise<AddCardOutcome>;
 
 /**
  * A single Shadow-DOM-isolated popup element, created once per content
@@ -47,16 +58,18 @@ type AddToAnkiHandler = (entry: DictionaryEntry) => Promise<AddToAnkiResult>;
  *
  * Starts non-interactive (`pointer-events: none`) so it never blocks normal
  * page clicks while just passively following the cursor; `pin()` switches it
- * to interactive so its "+Anki" buttons become clickable, and freezes it in
- * place (ignoring further `show()`/`hide()` calls) until `unpin()`.
+ * to interactive so its per-entry add-card button becomes clickable, and
+ * freezes it in place (ignoring further `show()`/`hide()` calls) until `unpin()`.
  */
 export class LookupPopup {
   private readonly container: HTMLDivElement;
-  private readonly onAddToAnki: AddToAnkiHandler;
+  private readonly getButtonLabel: () => string;
+  private readonly onAdd: AddCardHandler;
   private pinned = false;
 
-  constructor(onAddToAnki: AddToAnkiHandler) {
-    this.onAddToAnki = onAddToAnki;
+  constructor(getButtonLabel: () => string, onAdd: AddCardHandler) {
+    this.getButtonLabel = getButtonLabel;
+    this.onAdd = onAdd;
     const host = document.createElement('div');
     const shadow = host.attachShadow({ mode: 'open' });
 
@@ -77,7 +90,7 @@ export class LookupPopup {
 
   show(match: LookupMatch, x: number, y: number): void {
     if (this.pinned) return;
-    this.container.replaceChildren(...renderMatch(match, this.onAddToAnki));
+    this.container.replaceChildren(...renderMatch(match, this.getButtonLabel, this.onAdd));
     this.container.style.left = `${x}px`;
     this.container.style.top = `${y + 20}px`;
     this.container.style.display = 'block';
@@ -107,35 +120,41 @@ const MAX_SENSES_PER_ENTRY = 2;
 /**
  * Each matching entry (there can be more than one for a homograph, e.g.
  * 橋/箸/端 all read はし) gets its own block with its own headword+reading
- * and "+Anki" button, so its senses are never mistaken for belonging to a
+ * and add-card button, so its senses are never mistaken for belonging to a
  * different entry.
  */
-function renderMatch(match: LookupMatch, onAddToAnki: AddToAnkiHandler): Node[] {
-  return match.entries.slice(0, MAX_ENTRIES).map((entry) => renderEntry(entry, match.matchedText, onAddToAnki));
+function renderMatch(match: LookupMatch, getButtonLabel: () => string, onAdd: AddCardHandler): Node[] {
+  return match.entries
+    .slice(0, MAX_ENTRIES)
+    .map((entry) => renderEntry(entry, match.matchedText, getButtonLabel, onAdd));
 }
 
-function renderEntry(entry: DictionaryEntry, matchedText: string, onAddToAnki: AddToAnkiHandler): HTMLDivElement {
+function renderEntry(
+  entry: DictionaryEntry,
+  matchedText: string,
+  getButtonLabel: () => string,
+  onAdd: AddCardHandler,
+): HTMLDivElement {
   const entryEl = document.createElement('div');
   entryEl.className = 'entry';
 
-  const kanji = entry.kanji[0];
-  const reading = entry.readings[0];
+  const { headword: entryHeadword, reading } = entryDisplayFields(entry);
 
   const headword = document.createElement('span');
   headword.className = 'headword';
-  headword.textContent = kanji ?? reading ?? matchedText;
+  headword.textContent = entryHeadword || matchedText;
   entryEl.append(headword);
 
   // Only show the reading separately when there's a kanji headword to
   // disambiguate - for a kana-only entry the headword already is the reading.
-  if (kanji && reading) {
+  if (entry.kanji[0] && reading) {
     const readingEl = document.createElement('span');
     readingEl.className = 'reading';
     readingEl.textContent = reading;
     entryEl.append(readingEl);
   }
 
-  entryEl.append(renderAddButton(entry, onAddToAnki));
+  entryEl.append(renderAddButton(entry, getButtonLabel, onAdd));
 
   for (const sense of entry.senses.slice(0, MAX_SENSES_PER_ENTRY)) {
     const senseEl = document.createElement('div');
@@ -152,11 +171,11 @@ function renderEntry(entry: DictionaryEntry, matchedText: string, onAddToAnki: A
   return entryEl;
 }
 
-function renderAddButton(entry: DictionaryEntry, onAddToAnki: AddToAnkiHandler): HTMLButtonElement {
+function renderAddButton(entry: DictionaryEntry, getButtonLabel: () => string, onAdd: AddCardHandler): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'add-btn';
-  button.textContent = '+ Anki';
+  button.textContent = getButtonLabel();
 
   button.addEventListener('click', (event) => {
     // Stop this from reaching the content script's document-level click
@@ -166,19 +185,12 @@ function renderAddButton(entry: DictionaryEntry, onAddToAnki: AddToAnkiHandler):
     if (button.disabled) return;
 
     setButtonState(button, { text: '...', disabled: true });
-    onAddToAnki(entry)
+    onAdd(entry)
       .then((result) => {
         if (result.ok) {
           setButtonState(button, { text: '✓ Added', disabled: true });
-        } else if (result.reason === 'unreachable') {
-          setButtonState(button, {
-            text: '✗ Anki?',
-            disabled: false,
-            title:
-              'Could not reach AnkiConnect — is Anki running with the AnkiConnect add-on installed, and is this extension allowed in its webCorsOriginList?',
-          });
         } else {
-          setButtonState(button, { text: '✗ Error', disabled: false, title: result.message });
+          setButtonState(button, { text: '✗ Error', disabled: false, title: result.message ?? 'Unknown error.' });
         }
       })
       .catch(() => {

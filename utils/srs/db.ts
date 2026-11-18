@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { NewSrsCard, SrsCard } from './types.ts';
+import { reviewCard } from './scheduler.ts';
+import type { NewSrsCard, ReviewQuality, SrsCard } from './types.ts';
 
 interface SrsSchema extends DBSchema {
   cards: {
@@ -54,4 +55,31 @@ export async function countDueCards(db: SrsDB, now = Date.now()): Promise<number
 
 export async function updateCard(db: SrsDB, card: SrsCard): Promise<void> {
   await db.put('cards', card);
+}
+
+/**
+ * Reads the card, scores the review, and writes the result back within a
+ * single readwrite transaction - IndexedDB serializes readwrite
+ * transactions against the same store, so this is immune to the lost-update
+ * race a separate get()-then-put() (two transactions) would have if the same
+ * card were reviewed twice concurrently (e.g. a double-click, or two review
+ * tabs open on the same due card).
+ */
+export async function reviewCardById(
+  db: SrsDB,
+  cardId: number,
+  quality: ReviewQuality,
+  now = Date.now(),
+): Promise<SrsCard | null> {
+  const tx = db.transaction('cards', 'readwrite');
+  const card = await tx.store.get(cardId);
+  if (!card) {
+    await tx.done;
+    return null;
+  }
+
+  const reviewed = reviewCard(card, quality, now);
+  await tx.store.put(reviewed);
+  await tx.done;
+  return reviewed;
 }

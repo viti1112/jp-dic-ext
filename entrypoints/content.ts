@@ -1,9 +1,32 @@
+import type { AddCardOutcome } from '@/components/lookup-popup.ts';
 import { LookupPopup } from '@/components/lookup-popup.ts';
 import { basicCardFromEntry } from '@/utils/anki.ts';
 import { extractTextRun, isInteractiveElement } from '@/utils/content/text-run.ts';
+import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
-import { requestAddToAnki, requestLookup } from '@/utils/messaging.ts';
+import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
+import { requestAddToAnki, requestAddToSrs, requestLookup } from '@/utils/messaging.ts';
 import { getSettings, isActivationHeld, onSettingsChanged } from '@/utils/settings.ts';
+import { createCard } from '@/utils/srs/scheduler.ts';
+
+const ANKI_UNREACHABLE_MESSAGE =
+  'Could not reach AnkiConnect — is Anki running with the AnkiConnect add-on installed, and is this extension allowed in its webCorsOriginList?';
+
+async function addEntryViaAnki(entry: DictionaryEntry, deckName: string): Promise<AddCardOutcome> {
+  const result = await requestAddToAnki(basicCardFromEntry(entry, deckName));
+  if (result.ok) return { ok: true };
+  return { ok: false, message: result.reason === 'unreachable' ? ANKI_UNREACHABLE_MESSAGE : result.message };
+}
+
+async function addEntryViaSrs(entry: DictionaryEntry): Promise<AddCardOutcome> {
+  try {
+    const { headword, reading, glosses } = entryDisplayFields(entry);
+    await requestAddToSrs(createCard(entry.id, headword, reading, glosses.join('; ')));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Could not add to the review queue.' };
+  }
+}
 
 const THROTTLE_MS = 60;
 
@@ -25,7 +48,10 @@ export default defineContentScript({
       settings = next;
     });
 
-    const popup = new LookupPopup((entry) => requestAddToAnki(basicCardFromEntry(entry, settings.deckName)));
+    const popup = new LookupPopup(
+      () => (settings.reviewBackend === 'anki' ? '+ Anki' : '+ SRS'),
+      (entry) => (settings.reviewBackend === 'anki' ? addEntryViaAnki(entry, settings.deckName) : addEntryViaSrs(entry)),
+    );
     let currentMatch: LookupMatch | null = null;
     let throttled = false;
     let lastRequestKey = '';
@@ -92,8 +118,8 @@ export default defineContentScript({
         });
     });
 
-    // Clicking a matched word pins the popup open so its "+Anki" buttons
-    // become clickable; clicks on the (already-interactive) popup itself are
+    // Clicking a matched word pins the popup open so its add-card button
+    // becomes clickable; clicks on the (already-interactive) popup itself are
     // handled by its own buttons and never reach here (they stopPropagation).
     // Never hijacks a click on a link/button/form field the matched text
     // happens to sit inside of - that's a normal page click, not a pin.

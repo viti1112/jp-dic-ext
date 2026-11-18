@@ -2,15 +2,20 @@ import { browser } from 'wxt/browser';
 
 export type ActivationMode = 'shift' | 'alt' | 'always';
 
+/** Which system the popup's add-card button feeds - Anki, or the extension's own built-in mini-SRS. */
+export type ReviewBackend = 'anki' | 'srs';
+
 export interface ExtensionSettings {
   /** Which key (if any) must be held for Shift+hover-style lookups to trigger. */
   activationMode: ActivationMode;
   deckName: string;
+  reviewBackend: ReviewBackend;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   activationMode: 'shift',
   deckName: 'Japanese::Mining',
+  reviewBackend: 'anki',
 };
 
 const STORAGE_KEY = 'settings';

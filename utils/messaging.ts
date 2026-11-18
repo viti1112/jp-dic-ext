@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import type { AddToAnkiResult, AnkiCard } from './anki.ts';
 import type { LookupMatch } from './dictionary/lookup.ts';
+import type { NewSrsCard, ReviewQuality, SrsCard } from './srs/types.ts';
 
 export interface LookupRequestMessage {
   type: 'lookup';
@@ -17,7 +18,34 @@ export interface GetDictionaryCountRequestMessage {
   type: 'getDictionaryCount';
 }
 
-export type ExtensionMessage = LookupRequestMessage | AddToAnkiRequestMessage | GetDictionaryCountRequestMessage;
+export interface AddToSrsRequestMessage {
+  type: 'addToSrs';
+  card: NewSrsCard;
+}
+
+export interface GetDueSrsCountRequestMessage {
+  type: 'getDueSrsCount';
+}
+
+export interface GetDueSrsCardsRequestMessage {
+  type: 'getDueSrsCards';
+  limit: number;
+}
+
+export interface ReviewSrsCardRequestMessage {
+  type: 'reviewSrsCard';
+  cardId: number;
+  quality: ReviewQuality;
+}
+
+export type ExtensionMessage =
+  | LookupRequestMessage
+  | AddToAnkiRequestMessage
+  | GetDictionaryCountRequestMessage
+  | AddToSrsRequestMessage
+  | GetDueSrsCountRequestMessage
+  | GetDueSrsCardsRequestMessage
+  | ReviewSrsCardRequestMessage;
 
 export interface LookupResponseMessage {
   match: LookupMatch | null;
@@ -31,11 +59,32 @@ export interface GetDictionaryCountResponseMessage {
   count: number;
 }
 
+export interface AddToSrsResponseMessage {
+  /** `null` if the handler threw - still an explicit response, so the sender's promise resolves instead of hanging. */
+  card: SrsCard | null;
+}
+
+export interface GetDueSrsCountResponseMessage {
+  count: number;
+}
+
+export interface GetDueSrsCardsResponseMessage {
+  cards: SrsCard[];
+}
+
+export interface ReviewSrsCardResponseMessage {
+  card: SrsCard | null;
+}
+
 /** One handler per `ExtensionMessage` variant's `type`, so adding a message type is additive here rather than a rewrite. */
 interface MessageHandlers {
   lookup: (text: string, cursorIndex: number) => Promise<LookupMatch | null>;
   addToAnki: (card: AnkiCard) => Promise<AddToAnkiResult>;
   getDictionaryCount: () => Promise<number>;
+  addToSrs: (card: NewSrsCard) => Promise<SrsCard>;
+  getDueSrsCount: () => Promise<number>;
+  getDueSrsCards: (limit: number) => Promise<SrsCard[]>;
+  reviewSrsCard: (cardId: number, quality: ReviewQuality) => Promise<SrsCard | null>;
 }
 
 /**
@@ -69,6 +118,32 @@ export async function requestDictionaryCount(): Promise<number | null> {
   return response?.count ?? null;
 }
 
+/** Throws if the background doesn't answer or the handler failed - unlike Anki, there's no "expected unreachable" outcome for the local mini-SRS database. */
+export async function requestAddToSrs(card: NewSrsCard): Promise<SrsCard> {
+  const message: AddToSrsRequestMessage = { type: 'addToSrs', card };
+  const response = (await browser.runtime.sendMessage(message)) as AddToSrsResponseMessage | undefined;
+  if (!response?.card) throw new Error('Could not add the card to the review queue.');
+  return response.card;
+}
+
+export async function requestDueSrsCount(): Promise<number> {
+  const message: GetDueSrsCountRequestMessage = { type: 'getDueSrsCount' };
+  const response = (await browser.runtime.sendMessage(message)) as GetDueSrsCountResponseMessage | undefined;
+  return response?.count ?? 0;
+}
+
+export async function requestDueSrsCards(limit: number): Promise<SrsCard[]> {
+  const message: GetDueSrsCardsRequestMessage = { type: 'getDueSrsCards', limit };
+  const response = (await browser.runtime.sendMessage(message)) as GetDueSrsCardsResponseMessage | undefined;
+  return response?.cards ?? [];
+}
+
+export async function requestReviewSrsCard(cardId: number, quality: ReviewQuality): Promise<SrsCard | null> {
+  const message: ReviewSrsCardRequestMessage = { type: 'reviewSrsCard', cardId, quality };
+  const response = (await browser.runtime.sendMessage(message)) as ReviewSrsCardResponseMessage | undefined;
+  return response?.card ?? null;
+}
+
 /** Registers the background-side handler for every `ExtensionMessage` variant. */
 export function registerMessageHandlers(handlers: MessageHandlers): void {
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
@@ -90,6 +165,37 @@ export function registerMessageHandlers(handlers: MessageHandlers): void {
           .getDictionaryCount()
           .then((count) => sendResponse({ count } satisfies GetDictionaryCountResponseMessage))
           .catch(() => sendResponse({ count: 0 } satisfies GetDictionaryCountResponseMessage));
+        return true;
+      case 'addToSrs':
+        handlers
+          .addToSrs(message.card)
+          .then((card) => sendResponse({ card } satisfies AddToSrsResponseMessage))
+          .catch((error: unknown) => {
+            console.error('addToSrs failed:', error);
+            // Must still respond on failure (card: null), same as every other
+            // case - otherwise the sender's sendMessage promise never settles
+            // (it does not resolve to undefined, and does not reject either)
+            // and the caller hangs forever instead of seeing an error.
+            sendResponse({ card: null } satisfies AddToSrsResponseMessage);
+          });
+        return true;
+      case 'getDueSrsCount':
+        handlers
+          .getDueSrsCount()
+          .then((count) => sendResponse({ count } satisfies GetDueSrsCountResponseMessage))
+          .catch(() => sendResponse({ count: 0 } satisfies GetDueSrsCountResponseMessage));
+        return true;
+      case 'getDueSrsCards':
+        handlers
+          .getDueSrsCards(message.limit)
+          .then((cards) => sendResponse({ cards } satisfies GetDueSrsCardsResponseMessage))
+          .catch(() => sendResponse({ cards: [] } satisfies GetDueSrsCardsResponseMessage));
+        return true;
+      case 'reviewSrsCard':
+        handlers
+          .reviewSrsCard(message.cardId, message.quality)
+          .then((card) => sendResponse({ card } satisfies ReviewSrsCardResponseMessage))
+          .catch(() => sendResponse({ card: null } satisfies ReviewSrsCardResponseMessage));
         return true;
       default:
         return undefined;
