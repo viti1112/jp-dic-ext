@@ -4,13 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A Manifest V3 browser extension that provides contextual Japanese dictionary lookups (hover/Shift+hover over text on any page), built with WXT. Core pieces planned for this repo, beyond the current scaffold:
+A Manifest V3 browser extension that provides contextual Japanese dictionary lookups (Shift+hover over text on any page — plain hover is intentionally ignored, so the lookup pipeline doesn't fire on every incidental mouse movement), built with WXT. Implemented so far: the JMdict dictionary pipeline and IndexedDB store, the deinflection engine, longest-match cursor lookup, and the content script/popup/messaging wiring described under Architecture below. Still planned:
 
-- A JMdict-derived dictionary stored in IndexedDB, with a frequency list used to rank multiple meanings of the same word.
-- A deinflection engine (content/background logic) that does longest-match substring segmentation over Japanese text (no word boundaries) and validates candidate base forms against part-of-speech rules, rather than accepting any suffix match.
-- A content script that detects the word under the cursor, renders a lookup popup inside a Shadow DOM, and skips `<ruby>/<rt>` (furigana) nodes.
 - Export to Anki via the local AnkiConnect REST API (`http://127.0.0.1:8765`, already in `host_permissions`), plus an optional built-in mini-SRS stored in IndexedDB for users without Anki.
 - An options page (`chrome.storage`) for deck/model name, hotkey, and Anki vs. mini-SRS mode.
+
+Known gap: the cursor-detection API (`document.caretRangeFromPoint`) is Chromium/WebKit-only, so the feature is a no-op on Firefox despite the `dev:firefox`/`build:firefox` scripts existing — see `entrypoints/content.ts`'s top-of-file comment before changing cursor detection.
 
 ## Commands
 
@@ -29,7 +28,9 @@ This is a [WXT](https://wxt.dev) project (Vite-based MV3 framework, file-based e
 
 - **`entrypoints/`** — one file/folder per extension surface; WXT derives the manifest's `background`, `content_scripts`, and `action.default_popup` from what it finds here (`background.ts`, `content.ts`, `popup/`). Adding a new entrypoint (e.g. an options page) means adding a new file/folder here, not hand-editing the manifest.
 - **`wxt.config.ts`** — the single source of truth for `manifest.json` fields that aren't derived from entrypoints (name, `permissions`, `host_permissions`). AnkiConnect access is granted here via `host_permissions: ['http://127.0.0.1:8765/*']`; new cross-origin calls need their origin added here, not just in `fetch()` calls.
-- **`components/`** — shared UI helpers reused across entrypoints (currently just the starter `counter.ts`).
+- **`components/`** — shared UI/non-entrypoint pieces: `counter.ts` (popup page starter) and `lookup-popup.ts`'s `LookupPopup` class, a Shadow-DOM-isolated card the content script shows/hides/repositions per lookup (created once per injection, not recreated per hover).
+- **`utils/content/`** — DOM logic the content script needs that isn't itself an entrypoint: `text-run.ts`'s `extractTextRun()`/`isInsideRubyText()` pull the text run at a `caretRangeFromPoint` result and skip `<rt>` (furigana) nodes; tested with jsdom (`// @vitest-environment jsdom` in its `.test.ts`) since it's DOM-shaped but doesn't need a real browser.
+- **`utils/messaging.ts`** — the typed `browser.runtime.sendMessage`/`onMessage` contract between content script and background: `ExtensionMessage` is a discriminated union (currently just `lookup`) and `registerMessageHandlers()` dispatches on `message.type`, so a second message type (e.g. the planned Anki export) is additive — a new union member, a new `MessageHandlers` field, a new `switch` case — not a rewrite of this function.
 - **`utils/dictionary/`** — shared dictionary logic used at both build time and runtime: `types.ts` has the canonical `DictionaryEntry`/`Sense` shape, `frequency.ts` ranks competing entries that share a surface form (e.g. 橋/箸/端 all read はし) using JMdict's own `priority` tags — see the doc comment there for why this doesn't reorder senses within one entry. `db.ts` is the IndexedDB layer (`openDictionaryDB`/`seedIfEmpty`/`lookupExact`, indexed by kanji and reading, both multi-entry). `lookup.ts`'s `lookupAtCursor()` is the entry point everything else builds toward: longest-match substring scan from a cursor position, combined with `utils/deinflect/`'s candidates and frequency ranking.
 - **`utils/deinflect/`** — the Japanese deinflection engine (verbs + i-adjectives). `rules.ts` is table-driven per conjugation class (`godanRules()`/`suruRules()`/`ichidanShapedRules()` generators, not hand-copied per class) and documents its own known gaps at the top of the file. `deinflect.ts`'s `deinflect(word)` recursively strips suffixes and returns candidates tagged with the part-of-speech the real dictionary entry must have; `tagsMatch()` is the one place that checks a candidate's tags against real JMdict tags (it knows about the `"any"` sentinel on the unmodified input, so callers don't have to).
 - WXT auto-imports its own globals (`defineBackground`, `defineContentScript`, `browser`) inside `entrypoints/` — no explicit import needed, see `.wxt/types` after `wxt prepare` (runs automatically via the `postinstall` script) if a global's type isn't resolving.
