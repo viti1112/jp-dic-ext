@@ -5,19 +5,21 @@ const POPUP_STYLES = `
   .popup {
     position: fixed;
     z-index: 2147483647;
-    max-width: 320px;
+    max-width: 360px;
     background: #1e1e1e;
     color: #f0f0f0;
     border-radius: 6px;
-    padding: 8px 10px;
-    font: 14px / 1.4 -apple-system, system-ui, sans-serif;
+    padding: 10px 12px;
+    font: 14px / 1.5 -apple-system, system-ui, sans-serif;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     pointer-events: none;
   }
-  .headword { font-size: 16px; font-weight: 600; }
-  .reading { color: #9ad1ff; margin-left: 6px; font-size: 13px; }
-  .sense { margin-top: 4px; font-size: 13px; }
-  .pos { color: #8ecb8e; font-size: 11px; margin-right: 4px; }
+  .entry { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+  .entry:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .headword { font-size: 18px; font-weight: 600; }
+  .reading { color: #9ad1ff; margin-left: 8px; font-size: 14px; }
+  .sense { margin-top: 5px; font-size: 14px; }
+  .pos { color: #8ecb8e; font-size: 11px; margin-right: 6px; }
 `;
 
 /**
@@ -60,35 +62,47 @@ export class LookupPopup {
 const MAX_ENTRIES = 3;
 const MAX_SENSES_PER_ENTRY = 2;
 
+/**
+ * Each matching entry (there can be more than one for a homograph, e.g.
+ * 橋/箸/端 all read はし) gets its own block with its own headword+reading,
+ * so its senses are never mistaken for belonging to a different entry.
+ */
 function renderMatch(match: LookupMatch): Node[] {
-  const nodes: Node[] = [];
-  const firstEntry = match.entries[0];
+  return match.entries.slice(0, MAX_ENTRIES).map((entry) => renderEntry(entry, match.matchedText));
+}
+
+function renderEntry(entry: LookupMatch['entries'][number], matchedText: string): HTMLDivElement {
+  const entryEl = document.createElement('div');
+  entryEl.className = 'entry';
+
+  const kanji = entry.kanji[0];
+  const reading = entry.readings[0];
 
   const headword = document.createElement('span');
   headword.className = 'headword';
-  headword.textContent = firstEntry?.kanji[0] ?? match.matchedText;
-  nodes.push(headword);
+  headword.textContent = kanji ?? reading ?? matchedText;
+  entryEl.append(headword);
 
-  if (firstEntry?.readings[0]) {
-    const reading = document.createElement('span');
-    reading.className = 'reading';
-    reading.textContent = firstEntry.readings[0];
-    nodes.push(reading);
+  // Only show the reading separately when there's a kanji headword to
+  // disambiguate - for a kana-only entry the headword already is the reading.
+  if (kanji && reading) {
+    const readingEl = document.createElement('span');
+    readingEl.className = 'reading';
+    readingEl.textContent = reading;
+    entryEl.append(readingEl);
   }
 
-  for (const entry of match.entries.slice(0, MAX_ENTRIES)) {
-    for (const sense of entry.senses.slice(0, MAX_SENSES_PER_ENTRY)) {
-      const senseEl = document.createElement('div');
-      senseEl.className = 'sense';
+  for (const sense of entry.senses.slice(0, MAX_SENSES_PER_ENTRY)) {
+    const senseEl = document.createElement('div');
+    senseEl.className = 'sense';
 
-      const pos = document.createElement('span');
-      pos.className = 'pos';
-      pos.textContent = sense.pos.join(',');
+    const pos = document.createElement('span');
+    pos.className = 'pos';
+    pos.textContent = sense.pos.join(',');
 
-      senseEl.append(pos, document.createTextNode(sense.glosses.join('; ')));
-      nodes.push(senseEl);
-    }
+    senseEl.append(pos, document.createTextNode(sense.glosses.join('; ')));
+    entryEl.append(senseEl);
   }
 
-  return nodes;
+  return entryEl;
 }
