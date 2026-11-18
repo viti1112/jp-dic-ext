@@ -62,6 +62,8 @@ export interface GetDictionaryCountResponseMessage {
 export interface AddToSrsResponseMessage {
   /** `null` if the handler threw - still an explicit response, so the sender's promise resolves instead of hanging. */
   card: SrsCard | null;
+  /** Set alongside a `null` card so the caller can surface the real failure reason instead of a generic message. */
+  error?: string;
 }
 
 export interface GetDueSrsCountResponseMessage {
@@ -122,7 +124,7 @@ export async function requestDictionaryCount(): Promise<number | null> {
 export async function requestAddToSrs(card: NewSrsCard): Promise<SrsCard> {
   const message: AddToSrsRequestMessage = { type: 'addToSrs', card };
   const response = (await browser.runtime.sendMessage(message)) as AddToSrsResponseMessage | undefined;
-  if (!response?.card) throw new Error('Could not add the card to the review queue.');
+  if (!response?.card) throw new Error(response?.error ?? 'Could not add the card to the review queue.');
   return response.card;
 }
 
@@ -175,8 +177,13 @@ export function registerMessageHandlers(handlers: MessageHandlers): void {
             // Must still respond on failure (card: null), same as every other
             // case - otherwise the sender's sendMessage promise never settles
             // (it does not resolve to undefined, and does not reject either)
-            // and the caller hangs forever instead of seeing an error.
-            sendResponse({ card: null } satisfies AddToSrsResponseMessage);
+            // and the caller hangs forever instead of seeing an error. The
+            // real error message rides along so the caller isn't stuck with
+            // one generic string for every possible failure.
+            sendResponse({
+              card: null,
+              error: error instanceof Error ? error.message : undefined,
+            } satisfies AddToSrsResponseMessage);
           });
         return true;
       case 'getDueSrsCount':

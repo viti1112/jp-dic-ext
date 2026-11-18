@@ -79,8 +79,8 @@ export async function pingAnkiConnect(): Promise<boolean> {
  * pick a different note type.
  */
 export function basicCardFromEntry(entry: DictionaryEntry, deckName: string, modelName = 'Basic'): AnkiCard {
-  const { headword, reading, glosses } = entryDisplayFields(entry);
-  const front = entry.kanji[0] && reading ? `${headword} (${reading})` : headword;
+  const { headword, reading, glosses, showReading } = entryDisplayFields(entry);
+  const front = showReading ? `${headword} (${reading})` : headword;
 
   return {
     deckName,

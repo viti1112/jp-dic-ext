@@ -13,7 +13,11 @@ export interface LookupMatch {
   entries: DictionaryEntry[];
 }
 
-const DEFAULT_MAX_LENGTH = 20;
+/** No dictionary form is anywhere near this long; also the window the content script trims text down to before it ever crosses the messaging boundary (see `entrypoints/content.ts`). */
+export const MAX_LOOKUP_LENGTH = 20;
+
+/** How many homograph entries a match carries at most - the popup (`components/lookup-popup.ts`) only ever renders this many, so there's no point cloning more of them across the messaging boundary on every hover. */
+export const MAX_MATCHED_ENTRIES = 3;
 
 /**
  * Longest-match lookup: Japanese has no spaces between words, so starting at
@@ -26,7 +30,7 @@ export async function lookupAtCursor(
   db: DictionaryDB,
   text: string,
   cursorIndex: number,
-  maxLength = DEFAULT_MAX_LENGTH,
+  maxLength = MAX_LOOKUP_LENGTH,
 ): Promise<LookupMatch | null> {
   const upperBound = Math.min(maxLength, text.length - cursorIndex);
 
@@ -61,5 +65,5 @@ async function matchSubstring(
   }
 
   if (matchedEntries.length === 0) return null;
-  return { reasons: reasons ?? [], entries: sortByFrequency(matchedEntries) };
+  return { reasons: reasons ?? [], entries: sortByFrequency(matchedEntries).slice(0, MAX_MATCHED_ENTRIES) };
 }

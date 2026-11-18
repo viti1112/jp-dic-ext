@@ -1,5 +1,6 @@
 import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
+import { MAX_MATCHED_ENTRIES } from '@/utils/dictionary/lookup.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
 import { speakJapanese } from '@/utils/tts.ts';
 
@@ -124,8 +125,6 @@ export class LookupPopup {
   }
 }
 
-// Kept in sync deliberately: a "show fewer entries" change should revisit both.
-const MAX_ENTRIES = 3;
 const MAX_SENSES_PER_ENTRY = 2;
 
 /**
@@ -136,7 +135,7 @@ const MAX_SENSES_PER_ENTRY = 2;
  */
 function renderMatch(match: LookupMatch, getButtonLabel: () => string, onAdd: AddCardHandler): Node[] {
   return match.entries
-    .slice(0, MAX_ENTRIES)
+    .slice(0, MAX_MATCHED_ENTRIES)
     .map((entry) => renderEntry(entry, match.matchedText, getButtonLabel, onAdd));
 }
 
@@ -149,16 +148,14 @@ function renderEntry(
   const entryEl = document.createElement('div');
   entryEl.className = 'entry';
 
-  const { headword: entryHeadword, reading } = entryDisplayFields(entry);
+  const { headword: entryHeadword, reading, showReading } = entryDisplayFields(entry);
 
   const headword = document.createElement('span');
   headword.className = 'headword';
   headword.textContent = entryHeadword || matchedText;
   entryEl.append(headword);
 
-  // Only show the reading separately when there's a kanji headword to
-  // disambiguate - for a kana-only entry the headword already is the reading.
-  if (entry.kanji[0] && reading) {
+  if (showReading) {
     const readingEl = document.createElement('span');
     readingEl.className = 'reading';
     readingEl.textContent = reading;

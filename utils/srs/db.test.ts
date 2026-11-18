@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { addCardIfNew, countDueCards, getDueCards, openSrsDB, reviewCardById, updateCard, type SrsDB } from './db.ts';
+import { addCardIfNew, countDueCards, getDueCards, openSrsDB, reviewCardById, type SrsDB } from './db.ts';
 import { createCard, reviewCard } from './scheduler.ts';
 
 const NOW = 1_700_000_000_000;
@@ -32,6 +32,15 @@ describe('addCardIfNew', () => {
     await addCardIfNew(db, createCard(2, '書く', 'かく', 'to write', NOW));
     expect(await db.count('cards')).toBe(2);
   });
+
+  it('two concurrent calls for the same entry still only create one card', async () => {
+    const [first, second] = await Promise.all([
+      addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW)),
+      addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW)),
+    ]);
+    expect(second.id).toBe(first.id);
+    expect(await db.count('cards')).toBe(1);
+  });
 });
 
 describe('getDueCards / countDueCards', () => {
@@ -44,7 +53,7 @@ describe('getDueCards / countDueCards', () => {
   it('a card reviewed as "good" is not due until its new interval has passed', async () => {
     const card = await addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW));
     const reviewed = reviewCard(card, 'good', NOW);
-    await updateCard(db, reviewed);
+    await db.put('cards', reviewed);
 
     expect(await countDueCards(db, NOW)).toBe(0);
     expect(await countDueCards(db, NOW + reviewed.intervalDays * DAY_MS)).toBe(1);
@@ -65,19 +74,6 @@ describe('getDueCards / countDueCards', () => {
     expect(await countDueCards(db, NOW)).toBe(1);
     const due = await getDueCards(db, 10, NOW);
     expect(due.map((c) => c.entryId)).not.toContain(future.entryId);
-  });
-});
-
-describe('updateCard', () => {
-  it('persists the reviewed scheduling fields', async () => {
-    const card = await addCardIfNew(db, createCard(1, '読む', 'よむ', 'to read', NOW));
-    const reviewed = reviewCard(card, 'easy', NOW);
-    await updateCard(db, reviewed);
-
-    const stored = await db.get('cards', card.id);
-    expect(stored?.repetitions).toBe(reviewed.repetitions);
-    expect(stored?.easeFactor).toBeCloseTo(reviewed.easeFactor, 5);
-    expect(stored?.dueAt).toBe(reviewed.dueAt);
   });
 });
 

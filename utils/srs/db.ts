@@ -26,15 +26,26 @@ export async function openSrsDB(dbName = DB_NAME): Promise<SrsDB> {
   });
 }
 
-/** Avoids adding the same dictionary entry twice; returns the existing card if already present. */
+/**
+ * Avoids adding the same dictionary entry twice; returns the existing card if
+ * already present. Reads and (maybe) adds within a single readwrite
+ * transaction - the same reason `reviewCardById` does - so two concurrent
+ * calls for the same entry (e.g. a double-fired click) can't both see "not
+ * found" and both insert a duplicate card.
+ */
 export async function addCardIfNew(db: SrsDB, card: NewSrsCard): Promise<SrsCard> {
-  const existing = await db.getFromIndex('cards', 'entryId', card.entryId);
-  if (existing) return existing;
+  const tx = db.transaction('cards', 'readwrite');
+  const existing = await tx.store.index('entryId').get(card.entryId);
+  if (existing) {
+    await tx.done;
+    return existing;
+  }
 
   // `add()` expects a value shaped like the store's SrsCard (with `id`), but
   // the whole point of autoIncrement is that `id` isn't set yet - the real
   // object passed at runtime is a NewSrsCard, which is fine for IndexedDB.
-  const id = await db.add('cards', card as SrsCard);
+  const id = await tx.store.add(card as SrsCard);
+  await tx.done;
   return { ...card, id };
 }
 
@@ -51,10 +62,6 @@ export async function getDueCards(db: SrsDB, limit: number, now = Date.now()): P
 
 export async function countDueCards(db: SrsDB, now = Date.now()): Promise<number> {
   return db.countFromIndex('cards', 'dueAt', IDBKeyRange.upperBound(now));
-}
-
-export async function updateCard(db: SrsDB, card: SrsCard): Promise<void> {
-  await db.put('cards', card);
 }
 
 /**

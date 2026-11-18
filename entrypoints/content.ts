@@ -3,6 +3,7 @@ import { LookupPopup } from '@/components/lookup-popup.ts';
 import { basicCardFromEntry } from '@/utils/anki.ts';
 import { extractTextRun, isInteractiveElement } from '@/utils/content/text-run.ts';
 import { entryDisplayFields } from '@/utils/dictionary/display.ts';
+import { MAX_LOOKUP_LENGTH } from '@/utils/dictionary/lookup.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
 import { requestAddToAnki, requestAddToSrs, requestLookup } from '@/utils/messaging.ts';
@@ -68,6 +69,7 @@ export default defineContentScript({
       popup.hide();
       currentMatch = null;
       lastRequestKey = '';
+      latestRequestId++; // invalidate any lookup still in flight so it can't reopen the popup once it resolves
     }
 
     document.addEventListener('mousemove', (event) => {
@@ -98,19 +100,25 @@ export default defineContentScript({
         return;
       }
 
-      const requestKey = `${run.text}|${run.cursorIndex}`;
+      // Trim to the window lookupAtCursor actually reads before this crosses
+      // the messaging boundary - a page can put an entire article's text in
+      // one text node, and only the next MAX_LOOKUP_LENGTH characters from
+      // the cursor are ever used downstream.
+      const windowText = run.text.slice(run.cursorIndex, run.cursorIndex + MAX_LOOKUP_LENGTH);
+
+      const requestKey = windowText;
       if (requestKey === lastRequestKey) return;
       lastRequestKey = requestKey;
 
       const requestId = ++latestRequestId;
-      requestLookup(run.text, run.cursorIndex)
+      requestLookup(windowText, 0)
         .then((match) => {
           if (requestId !== latestRequestId) return; // a newer request has since superseded this one
           currentMatch = match;
           if (match) {
             popup.show(match, event.clientX, event.clientY);
           } else {
-            popup.hide();
+            hide();
           }
         })
         .catch(() => {
