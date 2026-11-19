@@ -142,6 +142,44 @@ test('pinning a match, adding it to the mini-SRS queue, and reviewing it works e
   await expect(review.locator('.empty-state')).toBeVisible({ timeout: 10_000 });
 });
 
+test('the "+ Anki" button fails gracefully (not a hang or a crash) when AnkiConnect is unreachable', async ({ context, extensionId, demoUrl }) => {
+  // Switch to Anki mode via the real options UI - the default is the
+  // mini-SRS (see utils/settings.ts), so this has to be explicit. Nothing
+  // in this environment runs AnkiConnect, which is exactly the case this
+  // test is for: does the extension fail this *visibly and recoverably*,
+  // rather than hanging forever or throwing, when Anki genuinely isn't there.
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+  await options.click('#backend-segmented button[data-backend="anki"]');
+  await options.waitForTimeout(300);
+  await options.close();
+
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverWithShiftUntilVisible(page, target);
+
+  await page.mouse.click(target.x, target.y);
+  await page.keyboard.up('Shift');
+
+  const addButton = page.locator('.add-btn').first();
+  await expect(addButton).toHaveText('+ Anki'); // confirms the backend switch actually took effect
+  await addButton.click();
+
+  // utils/anki.ts's fetchWithTimeout caps this at 10s - well under this
+  // assertion's own timeout, so a real hang (the bug a bare fetch() with no
+  // timeout would risk) would fail this test rather than just being slow.
+  await expect(addButton).toHaveText('✗ Error', { timeout: 15_000 });
+  expect(await addButton.isDisabled()).toBe(false); // retryable, e.g. once Anki is actually started
+  expect(await addButton.getAttribute('title')).toContain('AnkiConnect');
+
+  // Retrying doesn't hang or throw either - same outcome, not stuck on "...".
+  await addButton.click();
+  await expect(addButton).toHaveText('✗ Error', { timeout: 15_000 });
+});
+
 test('click-to-pin does not hijack a real link click', async ({ context, demoUrl }) => {
   const page = await context.newPage();
   await page.goto(demoUrl);
