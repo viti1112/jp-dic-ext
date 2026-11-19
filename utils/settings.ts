@@ -15,7 +15,14 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   activationMode: 'shift',
   deckName: 'Japanese::Mining',
-  reviewBackend: 'anki',
+  // The mini-SRS needs nothing beyond the extension itself - Anki requires
+  // installing Anki, the AnkiConnect add-on, and adding this extension's
+  // origin to AnkiConnect's webCorsOriginList, none of which a fresh install
+  // has done yet. Defaulting to 'anki' meant everyone saw a "not responding"
+  // status out of the box until they either set Anki up or switched this
+  // setting themselves. Anki is still one click away on the options page for
+  // anyone who already uses it.
+  reviewBackend: 'srs',
 };
 
 const STORAGE_KEY = 'settings';
