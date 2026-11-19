@@ -36,8 +36,8 @@ const POPUP_STYLES = `
     margin-left: auto;
     pointer-events: auto;
     cursor: pointer;
-    background: #b68235;
-    color: #1e1e1e;
+    background: #3461ea;
+    color: #ffffff;
     border: none;
     border-radius: 4px;
     font-size: 11px;
@@ -67,7 +67,7 @@ const POPUP_STYLES = `
     margin-left: 4px;
   }
   .example-btn:disabled { opacity: 0.6; cursor: default; }
-  .examples { flex: 1 0 100%; margin-top: 6px; font-size: 13px; color: #cfcfcf; font-style: italic; }
+  .examples { flex: 1 0 100%; margin-top: 6px; font-size: 13px; color: #cfcfcf; }
   .examples:empty { display: none; }
 `;
 

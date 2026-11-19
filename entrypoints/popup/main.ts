@@ -1,4 +1,3 @@
-import '@/components/fonts.css';
 import './style.css';
 import { pingAnkiConnect } from '@/utils/anki.ts';
 import { getAnkiLog } from '@/utils/anki-log.ts';
@@ -44,7 +43,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="anki-log-section">
       <h2 class="section-label">Добавлено в Anki</h2>
       <ul class="anki-log" id="anki-log"></ul>
     </section>
@@ -52,6 +51,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 `;
 
 const ankiSection = document.querySelector<HTMLDivElement>('#anki-section')!;
+const ankiLogSection = document.querySelector<HTMLDivElement>('#anki-log-section')!;
 const srsSection = document.querySelector<HTMLDivElement>('#srs-section')!;
 const ankiStatusDot = document.querySelector<HTMLSpanElement>('#anki-status-dot')!;
 const ankiStatusText = document.querySelector<HTMLSpanElement>('#anki-status-text')!;
@@ -63,6 +63,7 @@ const openOptionsButton = document.querySelector<HTMLButtonElement>('#open-optio
 
 function setVisibleSection(backend: ReviewBackend) {
   ankiSection.style.display = backend === 'anki' ? '' : 'none';
+  ankiLogSection.style.display = backend === 'anki' ? '' : 'none';
   srsSection.style.display = backend === 'srs' ? '' : 'none';
 }
 
@@ -107,12 +108,16 @@ async function init() {
   setVisibleSection(settings.reviewBackend);
   onSettingsChanged((next) => setVisibleSection(next.reviewBackend));
 
-  void pingAnkiConnect().then((connected) => {
-    ankiStatusDot.classList.add(connected ? 'connected' : 'disconnected');
-    ankiStatusText.textContent = connected ? 'подключено' : 'не отвечает';
-  });
+  // No point pinging AnkiConnect or reading the Anki log in mini-SRS mode -
+  // both sections are hidden, and the user may not even have Anki running.
+  if (settings.reviewBackend === 'anki') {
+    void pingAnkiConnect().then((connected) => {
+      ankiStatusDot.classList.add(connected ? 'connected' : 'disconnected');
+      ankiStatusText.textContent = connected ? 'подключено' : 'не отвечает';
+    });
 
-  void getAnkiLog().then(renderAnkiLog);
+    void getAnkiLog().then(renderAnkiLog);
+  }
 
   void requestDictionaryCount().then((count) => {
     dictCount.textContent = count === null ? 'недоступно' : `${count.toLocaleString('ru-RU')} записей`;

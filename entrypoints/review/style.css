@@ -1,9 +1,10 @@
 :root {
-  --accent: #b68235;
-  --ink: #201f1d;
-  --muted: #605d5d;
-  --bg: #f7f5f2;
-  --border: rgba(32, 31, 29, 0.1);
+  --accent: #3461ea;
+  --accent-ink: #ffffff;
+  --ink: #18181b;
+  --muted: #6b7280;
+  --bg: #f7f8fa;
+  --border: rgba(0, 0, 0, 0.08);
   color-scheme: light;
 }
 
@@ -19,7 +20,7 @@ body {
   justify-content: center;
   background: var(--bg);
   color: var(--ink);
-  font: 16px/1.6 'Lora', Georgia, serif;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .page {
@@ -45,17 +46,18 @@ body {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border: 1px solid var(--accent);
-  border-radius: 5px;
-  color: var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .card {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   padding: 40px 32px;
   min-height: 200px;
   display: flex;
@@ -66,8 +68,7 @@ body {
 }
 
 .headword {
-  font-family: 'Cormorant Garamond', Garamond, serif;
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 600;
 }
 
@@ -80,13 +81,13 @@ body {
   cursor: pointer;
   background: none;
   border: none;
-  font-size: 22px;
+  font-size: 20px;
   vertical-align: middle;
 }
 
 .glosses {
   margin-top: 12px;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--ink);
 }
 
@@ -99,12 +100,17 @@ body {
 .reveal-btn {
   margin-top: 20px;
   padding: 8px 20px;
-  font: 14px 'Lora', serif;
+  font: inherit;
+  font-weight: 600;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
+}
+
+.reveal-btn:hover {
+  filter: brightness(1.08);
 }
 
 .rate-row {
@@ -117,31 +123,32 @@ body {
 .rate-btn {
   flex: 1;
   padding: 10px 4px;
-  font: 13px 'Lora', serif;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
 }
 
 .rate-btn[data-quality='again'] {
-  background: #b5503f;
+  background: #e5484d;
 }
 
 .rate-btn[data-quality='hard'] {
-  background: #c08a3e;
+  background: #e8a93d;
 }
 
 .rate-btn[data-quality='good'] {
-  background: #5a8f5e;
+  background: #22a06b;
 }
 
 .rate-btn[data-quality='easy'] {
-  background: #4a7fb5;
+  background: #3461ea;
 }
 
 .empty-state {
   color: var(--muted);
-  font-style: italic;
   padding: 40px 0;
 }

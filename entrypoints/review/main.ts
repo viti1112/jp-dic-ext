@@ -1,4 +1,3 @@
-import '@/components/fonts.css';
 import './style.css';
 import { requestDueSrsCards, requestReviewSrsCard } from '@/utils/messaging.ts';
 import type { ReviewQuality, SrsCard } from '@/utils/srs/types.ts';
