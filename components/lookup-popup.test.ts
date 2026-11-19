@@ -185,7 +185,8 @@ describe('LookupPopup', () => {
     expect(container.querySelector('.example-btn')).toBeNull(); // asked once, no point asking again
   });
 
-  it('clicking "Пример" with no API key configured shows a helpful message and stays retryable', async () => {
+  it('clicking "Пример" with no API key configured shows a helpful message and becomes retryable after a cooldown', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const onExample = vi.fn(async () => ({ ok: false as const, reason: 'no-api-key' as const }));
     const popup = new LookupPopup(
       () => '+ Anki',
@@ -199,7 +200,12 @@ describe('LookupPopup', () => {
     const button = container.querySelector<HTMLButtonElement>('.example-btn')!;
     button.click();
     await vi.waitFor(() => expect(container.querySelector('.examples')?.textContent).toContain('настройках'));
-    expect(button.disabled).toBe(false); // retryable once a key is added
+    expect(button.disabled).toBe(true); // not immediately retryable - avoids spamming the API on repeat failures
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(button.disabled).toBe(false); // retryable once the cooldown passes
+
+    vi.useRealTimers();
   });
 
   it('speaking a word calls speechSynthesis with the reading, not the kanji', () => {

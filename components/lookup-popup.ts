@@ -257,6 +257,13 @@ function errorMessageFor(result: Exclude<GenerateExamplesResult, { ok: true }>):
   }
 }
 
+// After a failed request, the button stays disabled for a moment before
+// becoming retryable - without this, a user (or an impatient double-click)
+// could fire off repeated Claude API requests back-to-back on every
+// rejection (e.g. a bad key rejecting instantly every time), each one
+// spending real API credit for no new information.
+const RETRY_COOLDOWN_MS = 3000;
+
 function renderExampleButton(entry: DictionaryEntry, onExample: GenerateExamplesHandler, examplesEl: HTMLDivElement): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
@@ -264,9 +271,11 @@ function renderExampleButton(entry: DictionaryEntry, onExample: GenerateExamples
   button.textContent = 'Пример';
 
   const resetWithError = (message: string) => {
-    button.disabled = false;
     button.textContent = 'Пример';
     examplesEl.textContent = message;
+    setTimeout(() => {
+      button.disabled = false;
+    }, RETRY_COOLDOWN_MS);
   };
 
   button.addEventListener('click', (event) => {
