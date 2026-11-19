@@ -13,9 +13,12 @@ const MATCH: LookupMatch = {
 
 const noExamples = async () => ({ ok: false as const, reason: 'unreachable' as const });
 
+function getPopupHost(): HTMLDivElement {
+  return document.documentElement.querySelectorAll('div').item(document.documentElement.querySelectorAll('div').length - 1) as HTMLDivElement;
+}
+
 function getPopupElement(): HTMLDivElement {
-  const host = document.documentElement.querySelectorAll('div').item(document.documentElement.querySelectorAll('div').length - 1);
-  return host.shadowRoot!.querySelector('.popup')!;
+  return getPopupHost().shadowRoot!.querySelector('.popup')!;
 }
 
 beforeEach(() => {
@@ -154,6 +157,18 @@ describe('LookupPopup', () => {
     expect(parseInt(container.style.top)).toBe(600 - 150);
 
     vi.unstubAllGlobals();
+  });
+
+  it('containsEventTarget() is true for the popup host itself, false for anything else', () => {
+    const popup = new LookupPopup(
+      () => '+ Anki',
+      async () => ({ ok: true }),
+      noExamples,
+    );
+    const host = getPopupHost();
+    expect(popup.containsEventTarget(host)).toBe(true);
+    expect(popup.containsEventTarget(document.body)).toBe(false);
+    expect(popup.containsEventTarget(null)).toBe(false);
   });
 
   it('caps its own height to the viewport and scrolls internally, rather than overflowing off-screen', () => {

@@ -139,7 +139,19 @@ export default defineContentScript({
     // Never hijacks a click on a link/button/form field the matched text
     // happens to sit inside of - that's a normal page click, not a pin.
     document.addEventListener('click', (event) => {
-      if (popup.isPinned()) return;
+      if (popup.isPinned()) {
+        // Clicking anywhere outside the pinned popup dismisses it - the same
+        // outcome as Escape, just via the other common way people expect a
+        // pinned tooltip/dropdown to close. Not calling preventDefault()
+        // here: whatever was actually clicked (a link, blank page, another
+        // word) still gets its own normal click behavior: this only ever
+        // suppresses accidentally re-pinning on the very same click.
+        if (!popup.containsEventTarget(event.target)) {
+          popup.unpin();
+          currentMatch = null;
+        }
+        return;
+      }
       if (!isActivationHeld(settings.activationMode, event)) return;
       if (!currentMatch) return;
       if (isInteractiveElement(event.target)) return;

@@ -97,6 +97,7 @@ type GenerateExamplesHandler = (entry: DictionaryEntry) => Promise<GenerateExamp
  * freezes it in place (ignoring further `show()`/`hide()` calls) until `unpin()`.
  */
 export class LookupPopup {
+  private readonly host: HTMLDivElement;
   private readonly container: HTMLDivElement;
   private readonly getButtonLabel: () => string;
   private readonly onAdd: AddCardHandler;
@@ -107,8 +108,8 @@ export class LookupPopup {
     this.getButtonLabel = getButtonLabel;
     this.onAdd = onAdd;
     this.onExample = onExample;
-    const host = document.createElement('div');
-    const shadow = host.attachShadow({ mode: 'open' });
+    this.host = document.createElement('div');
+    const shadow = this.host.attachShadow({ mode: 'open' });
 
     const style = document.createElement('style');
     style.textContent = POPUP_STYLES;
@@ -118,11 +119,23 @@ export class LookupPopup {
     this.container.style.display = 'none';
 
     shadow.append(style, this.container);
-    document.documentElement.append(host);
+    document.documentElement.append(this.host);
   }
 
   isPinned(): boolean {
     return this.pinned;
+  }
+
+  /**
+   * True if `target` is anywhere inside this popup - a click event that
+   * crosses the shadow boundary is retargeted to `host` itself (the shadow
+   * root is `mode: 'open'`, but `target` as seen by a listener outside the
+   * tree is still the host element, not whatever was actually clicked
+   * inside it), so comparing against `host` covers every click inside the
+   * popup without needing `composedPath()`.
+   */
+  containsEventTarget(target: EventTarget | null): boolean {
+    return target === this.host;
   }
 
   show(match: LookupMatch, x: number, y: number): void {

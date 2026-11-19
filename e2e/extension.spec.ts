@@ -212,3 +212,25 @@ test('click-to-pin does not hijack a real link click', async ({ context, demoUrl
   await page.mouse.move(target.x, target.y - 1, { steps: 2 });
   await expect(page.locator('.headword').first()).toBeHidden();
 });
+
+test('clicking anywhere outside the pinned popup closes it, the same as Escape', async ({ context, demoUrl }) => {
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverWithShiftUntilVisible(page, target);
+
+  // Click to pin (still holding Shift, as the content script requires).
+  await page.mouse.click(target.x, target.y);
+  await page.keyboard.up('Shift');
+  await expect(page.locator('.headword').first()).toBeVisible();
+
+  // A plain click elsewhere on the page - not Shift-held, not on the
+  // popup, not on an interactive element (that's the separate link-click
+  // test above) - should dismiss the pinned popup just like Escape does,
+  // rather than leaving it stuck open until the user finds the right key.
+  const elsewhere = page.locator('#elsewhere');
+  await elsewhere.click();
+  await expect(page.locator('.headword').first()).toBeHidden();
+});
