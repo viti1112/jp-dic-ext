@@ -14,9 +14,11 @@
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "build:dictionary": "node scripts/jmdict/parse-jmdict.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "fake-indexeddb": "^6.2.8",
     "fast-xml-parser": "^5.12.1",
     "jsdom": "^31.0.1",

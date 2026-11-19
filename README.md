@@ -2,7 +2,7 @@
 
 A Manifest V3 browser extension that gives you a contextual Japanese dictionary on any web page: hold a modifier key (configurable — Shift, Alt, or always-on), hover over Japanese text, and get the dictionary-form lookup, reading, and meaning — even when the text is conjugated, deinflects correctly for verbs and i-adjectives, and ranks homographs by real-world frequency.
 
-Everything runs locally: the dictionary lives in IndexedDB (no network calls at lookup time), and the only outbound request this extension ever makes is to AnkiConnect on `127.0.0.1` — nothing leaves the machine.
+Everything runs locally by default: the dictionary lives in IndexedDB (no network calls at lookup time), and the only outbound request this extension makes is to AnkiConnect on `127.0.0.1`. The one opt-in exception is the example-sentence feature, which sends the matched word to Anthropic's API using your own API key if you choose to set one up — nothing else ever leaves the machine.
 
 ## Features
 
@@ -12,7 +12,8 @@ Everything runs locally: the dictionary lives in IndexedDB (no network calls at 
 - **Homograph frequency ranking** — when multiple entries share a reading (e.g. 橋/箸/端, all はし), they're ranked using JMdict's own frequency tags, and each gets its own clearly-separated card.
 - **Anki export or a built-in mini-SRS** — click to pin a lookup, then add it to Anki via [AnkiConnect](https://ankiweb.net/shared/info/2055492159), or to a built-in SM-2 spaced-repetition queue if you don't use Anki. A dedicated review page walks through due cards.
 - **Text-to-speech** — hear the reading via the browser's built-in Web Speech API.
-- **Toolbar popup** — configure the activation key, deck name, and Anki/mini-SRS mode; see AnkiConnect connectivity, dictionary size, and recently-added cards at a glance.
+- **Example sentences (optional)** — a "Пример" button asks Claude for a couple of natural example sentences using the matched word, if you've added your own Anthropic API key in the options page.
+- **Toolbar popup + options page** — the popup shows AnkiConnect connectivity / due-card count and recently-added cards at a glance; the activation key, deck name, Anki/mini-SRS mode, and Claude API key live on a dedicated options page (gear icon in the popup).
 
 ## Architecture
 
@@ -28,12 +29,14 @@ flowchart TB
         SRS[("IndexedDB<br/>mini-SRS cards")]
     end
 
-    subgraph ui["Toolbar popup / Review page"]
+    subgraph ui["Toolbar popup / Options / Review page"]
         POPUP["popup.html"]
+        OPTIONS["options.html"]
         REVIEW["review.html"]
     end
 
     ANKI["AnkiConnect<br/>(127.0.0.1:8765)"]
+    CLAUDE["Claude API<br/>(api.anthropic.com)"]
 
     CS <-- "runtime messaging<br/>(utils/messaging.ts)" --> BG
     POPUP <-- "runtime messaging" --> BG
@@ -41,6 +44,7 @@ flowchart TB
     BG --> DICT
     BG --> SRS
     BG -- "HTTP POST (localhost only)" --> ANKI
+    BG -. "HTTPS, user's own API key" .-> CLAUDE
 
     CS -. "deinflect + longest-match<br/>(utils/deinflect/, utils/dictionary/lookup.ts)" .-> DICT
 ```
@@ -78,6 +82,7 @@ Other useful commands:
 npm run compile    # type-check
 npm run test       # run the Vitest suite (fast - uses a tiny fixture dictionary, not the real one)
 npm run build      # production build -> .output/chrome-mv3/
+npm run test:e2e   # Playwright smoke test against the built extension in a real Chromium (run npm run build first)
 ```
 
 See [`CLAUDE.md`](./CLAUDE.md) for a deeper tour of the codebase's structure and the reasoning behind specific design decisions.
@@ -88,4 +93,4 @@ This software uses the JMdict dictionary file. This file is the property of the 
 
 ## License
 
-No license has been chosen yet for this project's own code — MIT would be a reasonable default for a project like this, but that's a decision for you to make (and a `LICENSE` file to add) before treating it as open source. The JMdict data's own licence is as described above regardless.
+This project's own code is MIT licensed - see [`LICENSE`](./LICENSE). The JMdict data's own licence is as described above regardless.

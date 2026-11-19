@@ -24,6 +24,12 @@ web-ext.config.ts
 data
 public/dictionary
 
+# Playwright E2E (npm run test:e2e) output
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

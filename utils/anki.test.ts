@@ -50,6 +50,31 @@ describe('addNoteToAnki', () => {
     const result = await addNoteToAnki(CARD);
     expect(result).toEqual({ ok: false, reason: 'rejected', message: 'deck not found' });
   });
+
+  it('reports "unreachable" rather than a false success when the body is not valid JSON', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        ({
+          json: async () => {
+            throw new SyntaxError('Unexpected token');
+          },
+        }) as unknown as Response,
+    );
+    const result = await addNoteToAnki(CARD);
+    expect(result).toEqual({ ok: false, reason: 'unreachable' });
+  });
+
+  it('reports "unreachable" rather than a false success when the body has neither a numeric result nor a string error', async () => {
+    globalThis.fetch = vi.fn(async () => ({ json: async () => ({ result: null, error: null }) }) as Response);
+    const result = await addNoteToAnki(CARD);
+    expect(result).toEqual({ ok: false, reason: 'unreachable' });
+  });
+
+  it('reports "unreachable" rather than a false success for a response that is not the expected {result, error} shape', async () => {
+    globalThis.fetch = vi.fn(async () => ({ json: async () => ({ status: 'ok' }) }) as Response);
+    const result = await addNoteToAnki(CARD);
+    expect(result).toEqual({ ok: false, reason: 'unreachable' });
+  });
 });
 
 describe('basicCardFromEntry', () => {

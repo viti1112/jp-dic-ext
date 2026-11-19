@@ -16,8 +16,10 @@ export default defineConfig({
     // .claude/worktrees/ holds nested checkouts for background agent tasks;
     // without this, their copies of this repo's own *.test.ts files get
     // picked up too, double-counting (and double-running) every test.
-    // Spread Vitest's own defaults (node_modules, dist, .git, ...) rather
-    // than replacing them outright.
-    exclude: [...configDefaults.exclude, '**/.claude/worktrees/**'],
+    // e2e/ holds Playwright specs (run via `npm run test:e2e`, a real
+    // Chromium with the built extension loaded) - Vitest's default include
+    // pattern matches *.spec.ts too, so without this it would also try to
+    // run them itself, in jsdom, with no extension context at all.
+    exclude: [...configDefaults.exclude, '**/.claude/worktrees/**', '**/e2e/**'],
   },
 });

@@ -2,20 +2,9 @@ import './style.css';
 import { pingAnkiConnect } from '@/utils/anki.ts';
 import { getAnkiLog } from '@/utils/anki-log.ts';
 import { requestDictionaryCount, requestDueSrsCount } from '@/utils/messaging.ts';
-import type { ActivationMode, ReviewBackend } from '@/utils/settings.ts';
-import { getSettings, updateSettings } from '@/utils/settings.ts';
+import type { ReviewBackend } from '@/utils/settings.ts';
+import { getSettings, onSettingsChanged } from '@/utils/settings.ts';
 import { browser } from 'wxt/browser';
-
-const ACTIVATION_LABELS: Record<ActivationMode, string> = {
-  shift: 'Shift',
-  alt: 'Alt',
-  always: 'Всегда',
-};
-
-const REVIEW_BACKEND_LABELS: Record<ReviewBackend, string> = {
-  anki: 'Anki',
-  srs: 'Мини-SRS',
-};
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="panel">
@@ -25,25 +14,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <span class="brand-name">KanjiFlow</span>
         <span class="brand-sub">Contextual Japanese Inspector</span>
       </div>
+      <button type="button" class="icon-btn" id="open-options" title="Настройки">⚙</button>
     </header>
-
-    <section class="section">
-      <h2 class="section-label">Активация поиска</h2>
-      <div class="segmented" id="activation-segmented">
-        ${(Object.keys(ACTIVATION_LABELS) as ActivationMode[])
-          .map((mode) => `<button type="button" data-mode="${mode}">${ACTIVATION_LABELS[mode]}</button>`)
-          .join('')}
-      </div>
-    </section>
-
-    <section class="section">
-      <h2 class="section-label">Карточки</h2>
-      <div class="segmented" id="backend-segmented">
-        ${(Object.keys(REVIEW_BACKEND_LABELS) as ReviewBackend[])
-          .map((backend) => `<button type="button" data-backend="${backend}">${REVIEW_BACKEND_LABELS[backend]}</button>`)
-          .join('')}
-      </div>
-    </section>
 
     <section class="section" id="anki-section">
       <h2 class="section-label">AnkiConnect</h2>
@@ -51,8 +23,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <span class="status-dot" id="anki-status-dot"></span>
         <span id="anki-status-text">проверка…</span>
       </div>
-      <label class="field-label" for="deck-input">Колода</label>
-      <input id="deck-input" type="text" />
       <p class="meta-line">127.0.0.1:8765 · модель Basic</p>
     </section>
 
@@ -80,66 +50,27 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 `;
 
-const segmented = document.querySelector<HTMLDivElement>('#activation-segmented')!;
-const backendSegmented = document.querySelector<HTMLDivElement>('#backend-segmented')!;
 const ankiSection = document.querySelector<HTMLDivElement>('#anki-section')!;
 const srsSection = document.querySelector<HTMLDivElement>('#srs-section')!;
-const deckInput = document.querySelector<HTMLInputElement>('#deck-input')!;
 const ankiStatusDot = document.querySelector<HTMLSpanElement>('#anki-status-dot')!;
 const ankiStatusText = document.querySelector<HTMLSpanElement>('#anki-status-text')!;
 const dictCount = document.querySelector<HTMLSpanElement>('#dict-count')!;
 const srsDueCount = document.querySelector<HTMLSpanElement>('#srs-due-count')!;
 const ankiLogList = document.querySelector<HTMLUListElement>('#anki-log')!;
 const startReviewButton = document.querySelector<HTMLButtonElement>('#start-review')!;
+const openOptionsButton = document.querySelector<HTMLButtonElement>('#open-options')!;
 
-function setActiveSegment(mode: ActivationMode) {
-  for (const button of segmented.querySelectorAll<HTMLButtonElement>('button')) {
-    button.classList.toggle('active', button.dataset.mode === mode);
-  }
-}
-
-function setActiveBackend(backend: ReviewBackend) {
-  for (const button of backendSegmented.querySelectorAll<HTMLButtonElement>('button')) {
-    button.classList.toggle('active', button.dataset.backend === backend);
-  }
+function setVisibleSection(backend: ReviewBackend) {
   ankiSection.style.display = backend === 'anki' ? '' : 'none';
   srsSection.style.display = backend === 'srs' ? '' : 'none';
 }
-
-segmented.addEventListener('click', (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]');
-  if (!button) return;
-  const mode = button.dataset.mode as ActivationMode;
-  setActiveSegment(mode);
-  void updateSettings({ activationMode: mode });
-});
-
-backendSegmented.addEventListener('click', (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-backend]');
-  if (!button) return;
-  const backend = button.dataset.backend as ReviewBackend;
-  setActiveBackend(backend);
-  void updateSettings({ reviewBackend: backend });
-});
 
 startReviewButton.addEventListener('click', () => {
   void browser.tabs.create({ url: browser.runtime.getURL('/review.html') });
 });
 
-// The source of truth for "what's currently saved" - deliberately not
-// `deckInput.defaultValue`, which never changes after the input's initial
-// value and would make a later empty-input revert fall back to the
-// original load-time deck name instead of the most recently saved one.
-let currentDeckName = '';
-
-deckInput.addEventListener('change', () => {
-  const next = deckInput.value.trim();
-  if (!next) {
-    deckInput.value = currentDeckName; // reject an empty deck name, don't persist it
-    return;
-  }
-  currentDeckName = next;
-  void updateSettings({ deckName: next });
+openOptionsButton.addEventListener('click', () => {
+  void browser.runtime.openOptionsPage();
 });
 
 function renderAnkiLog(entries: { term: string; addedAt: number }[]) {
@@ -172,10 +103,8 @@ function formatRelativeTime(timestamp: number): string {
 
 async function init() {
   const settings = await getSettings();
-  setActiveSegment(settings.activationMode);
-  setActiveBackend(settings.reviewBackend);
-  currentDeckName = settings.deckName;
-  deckInput.value = settings.deckName;
+  setVisibleSection(settings.reviewBackend);
+  onSettingsChanged((next) => setVisibleSection(next.reviewBackend));
 
   void pingAnkiConnect().then((connected) => {
     ankiStatusDot.classList.add(connected ? 'connected' : 'disconnected');

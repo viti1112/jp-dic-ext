@@ -1,12 +1,13 @@
 import type { AddCardOutcome } from '@/components/lookup-popup.ts';
 import { LookupPopup } from '@/components/lookup-popup.ts';
 import { basicCardFromEntry } from '@/utils/anki.ts';
+import type { GenerateExamplesResult } from '@/utils/claude.ts';
 import { extractTextRun, isInteractiveElement } from '@/utils/content/text-run.ts';
 import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import { MAX_LOOKUP_LENGTH } from '@/utils/dictionary/lookup.ts';
 import type { LookupMatch } from '@/utils/dictionary/lookup.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
-import { requestAddToAnki, requestAddToSrs, requestLookup } from '@/utils/messaging.ts';
+import { requestAddToAnki, requestAddToSrs, requestGenerateExamples, requestLookup } from '@/utils/messaging.ts';
 import { getSettings, isActivationHeld, onSettingsChanged } from '@/utils/settings.ts';
 import { createCard } from '@/utils/srs/scheduler.ts';
 
@@ -27,6 +28,11 @@ async function addEntryViaSrs(entry: DictionaryEntry): Promise<AddCardOutcome> {
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'Could not add to the review queue.' };
   }
+}
+
+function generateExamplesForEntry(entry: DictionaryEntry): Promise<GenerateExamplesResult> {
+  const { headword, reading, glosses } = entryDisplayFields(entry);
+  return requestGenerateExamples(headword, reading, glosses[0] ?? '');
 }
 
 const THROTTLE_MS = 60;
@@ -52,6 +58,7 @@ export default defineContentScript({
     const popup = new LookupPopup(
       () => (settings.reviewBackend === 'anki' ? '+ Anki' : '+ SRS'),
       (entry) => (settings.reviewBackend === 'anki' ? addEntryViaAnki(entry, settings.deckName) : addEntryViaSrs(entry)),
+      generateExamplesForEntry,
     );
     let currentMatch: LookupMatch | null = null;
     let throttled = false;

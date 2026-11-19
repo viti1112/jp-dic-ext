@@ -25,8 +25,27 @@ export type AddToAnkiResult =
   | { ok: false; reason: 'rejected'; message: string };
 
 interface AnkiConnectResponse {
-  result: number | null;
-  error: string | null;
+  result: unknown;
+  error: unknown;
+}
+
+/**
+ * Parses and validates an AnkiConnect response body - `null` if the body
+ * isn't valid JSON, or isn't the `{result, error}` shape AnkiConnect always
+ * replies with (e.g. some other local service answered on that port). Kept
+ * separate from `fetch()`'s own try/catch so a malformed response is
+ * distinguished from a network-level failure, rather than silently treated
+ * as either an unexplained crash or - worse - a false success.
+ */
+async function parseAnkiConnectResponse(response: Response): Promise<AnkiConnectResponse | null> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return null;
+  }
+  if (typeof body !== 'object' || body === null || !('result' in body) || !('error' in body)) return null;
+  return body as AnkiConnectResponse;
 }
 
 export async function addNoteToAnki(card: AnkiCard): Promise<AddToAnkiResult> {
@@ -51,11 +70,12 @@ export async function addNoteToAnki(card: AnkiCard): Promise<AddToAnkiResult> {
     return { ok: false, reason: 'unreachable' };
   }
 
-  const body = (await response.json()) as AnkiConnectResponse;
-  if (body.error) {
-    return { ok: false, reason: 'rejected', message: body.error };
-  }
-  return { ok: true, noteId: body.result! };
+  const body = await parseAnkiConnectResponse(response);
+  if (!body) return { ok: false, reason: 'unreachable' };
+  if (typeof body.error === 'string') return { ok: false, reason: 'rejected', message: body.error };
+  if (typeof body.result === 'number') return { ok: true, noteId: body.result };
+  // Neither a string error nor a numeric note id - an unexpected shape we can't treat as a real success.
+  return { ok: false, reason: 'unreachable' };
 }
 
 /** True if AnkiConnect answered at all - same "can't tell CORS from not-running" caveat as `addNoteToAnki`. */
@@ -65,8 +85,8 @@ export async function pingAnkiConnect(): Promise<boolean> {
       method: 'POST',
       body: JSON.stringify({ action: 'version', version: ANKI_CONNECT_VERSION }),
     });
-    const body = (await response.json()) as AnkiConnectResponse;
-    return body.error == null;
+    const body = await parseAnkiConnectResponse(response);
+    return body !== null && body.error == null;
   } catch {
     return false;
   }

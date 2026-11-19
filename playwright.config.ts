@@ -1,0 +1,15 @@
+import { defineConfig } from '@playwright/test';
+
+// Smoke-level E2E against the built extension (.output/chrome-mv3) in a real
+// Chromium with the extension loaded - npm run build must have run first.
+// Not meant to cover every feature; it exists to catch "the extension
+// doesn't load/the page crashes on open" regressions unit tests can't see.
+export default defineConfig({
+  testDir: './e2e',
+  // The dictionary-seeding test needs headroom for a cold ~219k-entry bulk
+  // insert on a brand-new profile, well past Playwright's 30s default.
+  timeout: 90_000,
+  fullyParallel: false, // all tests share one persistent browser context/profile
+  workers: 1,
+  reporter: 'list',
+});

@@ -11,6 +11,8 @@ const MATCH: LookupMatch = {
   ],
 };
 
+const noExamples = async () => ({ ok: false as const, reason: 'unreachable' as const });
+
 function getPopupElement(): HTMLDivElement {
   const host = document.documentElement.querySelectorAll('div').item(document.documentElement.querySelectorAll('div').length - 1);
   return host.shadowRoot!.querySelector('.popup')!;
@@ -25,6 +27,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     const container = getPopupElement();
     expect(container.style.display).toBe('none');
@@ -35,6 +38,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     popup.show(MATCH, 10, 20);
 
@@ -49,6 +53,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     popup.show(MATCH, 0, 0);
     popup.pin();
@@ -65,6 +70,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     popup.show(MATCH, 0, 0);
     popup.pin();
@@ -80,7 +86,7 @@ describe('LookupPopup', () => {
 
   it('clicking the add-card button calls onAdd and reflects success', async () => {
     const onAdd = vi.fn(async () => ({ ok: true }));
-    const popup = new LookupPopup(() => '+ Anki', onAdd);
+    const popup = new LookupPopup(() => '+ Anki', onAdd, noExamples);
     popup.show(MATCH, 0, 0);
     popup.pin();
 
@@ -93,7 +99,7 @@ describe('LookupPopup', () => {
 
   it('clicking the add-card button reflects a failure with the error message as the tooltip', async () => {
     const onAdd = vi.fn(async () => ({ ok: false, message: 'deck not found' }));
-    const popup = new LookupPopup(() => '+ SRS', onAdd);
+    const popup = new LookupPopup(() => '+ SRS', onAdd, noExamples);
     popup.show(MATCH, 0, 0);
     popup.pin();
 
@@ -116,6 +122,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     popup.show(homographMatch, 0, 0);
 
@@ -131,6 +138,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     const container = getPopupElement();
     Object.defineProperty(container, 'offsetWidth', { value: 360, configurable: true });
@@ -146,6 +154,41 @@ describe('LookupPopup', () => {
     expect(parseInt(container.style.top)).toBe(600 - 150);
 
     vi.unstubAllGlobals();
+  });
+
+  it('clicking "Пример" calls onExample and renders the sentences, then removes the button', async () => {
+    const onExample = vi.fn(async () => ({ ok: true as const, sentences: ['本を読む。', '新聞を読みます。'] }));
+    const popup = new LookupPopup(
+      () => '+ Anki',
+      async () => ({ ok: true }),
+      onExample,
+    );
+    popup.show(MATCH, 0, 0);
+    popup.pin();
+
+    const container = getPopupElement();
+    const button = container.querySelector<HTMLButtonElement>('.example-btn')!;
+    button.click();
+    await vi.waitFor(() => expect(container.querySelector('.examples')?.textContent).toContain('本を読む。'));
+    expect(onExample).toHaveBeenCalledWith(MATCH.entries[0]);
+    expect(container.querySelector('.example-btn')).toBeNull(); // asked once, no point asking again
+  });
+
+  it('clicking "Пример" with no API key configured shows a helpful message and stays retryable', async () => {
+    const onExample = vi.fn(async () => ({ ok: false as const, reason: 'no-api-key' as const }));
+    const popup = new LookupPopup(
+      () => '+ Anki',
+      async () => ({ ok: true }),
+      onExample,
+    );
+    popup.show(MATCH, 0, 0);
+    popup.pin();
+
+    const container = getPopupElement();
+    const button = container.querySelector<HTMLButtonElement>('.example-btn')!;
+    button.click();
+    await vi.waitFor(() => expect(container.querySelector('.examples')?.textContent).toContain('настройках'));
+    expect(button.disabled).toBe(false); // retryable once a key is added
   });
 
   it('speaking a word calls speechSynthesis with the reading, not the kanji', () => {
@@ -168,6 +211,7 @@ describe('LookupPopup', () => {
     const popup = new LookupPopup(
       () => '+ Anki',
       async () => ({ ok: true }),
+      noExamples,
     );
     popup.show(MATCH, 0, 0);
     popup.pin();

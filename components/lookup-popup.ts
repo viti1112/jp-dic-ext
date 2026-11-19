@@ -1,3 +1,4 @@
+import type { GenerateExamplesResult } from '@/utils/claude.ts';
 import { entryDisplayFields } from '@/utils/dictionary/display.ts';
 import type { DictionaryEntry } from '@/utils/dictionary/types.ts';
 import { MAX_MATCHED_ENTRIES } from '@/utils/dictionary/lookup.ts';
@@ -47,6 +48,20 @@ const POPUP_STYLES = `
     padding: 0 4px;
     line-height: 1;
   }
+  .example-btn {
+    pointer-events: auto;
+    cursor: pointer;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #cfcfcf;
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 2px 6px;
+    margin-left: 4px;
+  }
+  .example-btn:disabled { opacity: 0.6; cursor: default; }
+  .examples { flex: 1 0 100%; margin-top: 6px; font-size: 13px; color: #cfcfcf; font-style: italic; }
+  .examples:empty { display: none; }
 `;
 
 /**
@@ -61,6 +76,7 @@ export interface AddCardOutcome {
 }
 
 type AddCardHandler = (entry: DictionaryEntry) => Promise<AddCardOutcome>;
+type GenerateExamplesHandler = (entry: DictionaryEntry) => Promise<GenerateExamplesResult>;
 
 /**
  * A single Shadow-DOM-isolated popup element, created once per content
@@ -77,11 +93,13 @@ export class LookupPopup {
   private readonly container: HTMLDivElement;
   private readonly getButtonLabel: () => string;
   private readonly onAdd: AddCardHandler;
+  private readonly onExample: GenerateExamplesHandler;
   private pinned = false;
 
-  constructor(getButtonLabel: () => string, onAdd: AddCardHandler) {
+  constructor(getButtonLabel: () => string, onAdd: AddCardHandler, onExample: GenerateExamplesHandler) {
     this.getButtonLabel = getButtonLabel;
     this.onAdd = onAdd;
+    this.onExample = onExample;
     const host = document.createElement('div');
     const shadow = host.attachShadow({ mode: 'open' });
 
@@ -102,7 +120,7 @@ export class LookupPopup {
 
   show(match: LookupMatch, x: number, y: number): void {
     if (this.pinned) return;
-    this.container.replaceChildren(...renderMatch(match, this.getButtonLabel, this.onAdd));
+    this.container.replaceChildren(...renderMatch(match, this.getButtonLabel, this.onAdd, this.onExample));
     // Render off-screen first to measure the popup's actual size (depends on
     // how much text this particular match has) before clamping x/y to the
     // viewport - otherwise a popup near the right or bottom edge would
@@ -142,10 +160,15 @@ const MAX_SENSES_PER_ENTRY = 2;
  * and add-card button, so its senses are never mistaken for belonging to a
  * different entry.
  */
-function renderMatch(match: LookupMatch, getButtonLabel: () => string, onAdd: AddCardHandler): Node[] {
+function renderMatch(
+  match: LookupMatch,
+  getButtonLabel: () => string,
+  onAdd: AddCardHandler,
+  onExample: GenerateExamplesHandler,
+): Node[] {
   return match.entries
     .slice(0, MAX_MATCHED_ENTRIES)
-    .map((entry) => renderEntry(entry, match.matchedText, getButtonLabel, onAdd));
+    .map((entry) => renderEntry(entry, match.matchedText, getButtonLabel, onAdd, onExample));
 }
 
 function renderEntry(
@@ -153,6 +176,7 @@ function renderEntry(
   matchedText: string,
   getButtonLabel: () => string,
   onAdd: AddCardHandler,
+  onExample: GenerateExamplesHandler,
 ): HTMLDivElement {
   const entryEl = document.createElement('div');
   entryEl.className = 'entry';
@@ -176,6 +200,11 @@ function renderEntry(
   // pronunciation here (entryDisplayFields falls back to the headword
   // itself only for the rare entry with no reading at all).
   entryEl.append(renderSpeakButton(reading || entryHeadword));
+
+  const examplesEl = document.createElement('div');
+  examplesEl.className = 'examples';
+  entryEl.append(renderExampleButton(entry, onExample, examplesEl));
+
   entryEl.append(renderAddButton(entry, getButtonLabel, onAdd));
 
   for (const sense of entry.senses.slice(0, MAX_SENSES_PER_ENTRY)) {
@@ -190,6 +219,8 @@ function renderEntry(
     entryEl.append(senseEl);
   }
 
+  entryEl.append(examplesEl);
+
   return entryEl;
 }
 
@@ -203,6 +234,44 @@ function renderSpeakButton(text: string): HTMLButtonElement {
   button.addEventListener('click', (event) => {
     event.stopPropagation(); // same reason as the add-card button: don't let this double as a pin-click
     speakJapanese(text);
+  });
+
+  return button;
+}
+
+function renderExampleButton(entry: DictionaryEntry, onExample: GenerateExamplesHandler, examplesEl: HTMLDivElement): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'example-btn';
+  button.textContent = 'Пример';
+
+  button.addEventListener('click', (event) => {
+    event.stopPropagation(); // same reason as the other buttons: don't let this double as a pin-click
+    if (button.disabled) return;
+
+    button.disabled = true;
+    button.textContent = '…';
+    onExample(entry)
+      .then((result) => {
+        if (result.ok) {
+          examplesEl.textContent = result.sentences.join(' / ');
+          button.remove(); // no point asking Claude twice for the same entry
+        } else {
+          button.disabled = false;
+          button.textContent = 'Пример';
+          examplesEl.textContent =
+            result.reason === 'no-api-key'
+              ? 'Добавьте ключ Anthropic API в настройках расширения.'
+              : result.reason === 'unreachable'
+                ? 'Не удалось связаться с Claude API.'
+                : result.message;
+        }
+      })
+      .catch(() => {
+        button.disabled = false;
+        button.textContent = 'Пример';
+        examplesEl.textContent = 'Не удалось связаться с фоновым процессом расширения.';
+      });
   });
 
   return button;

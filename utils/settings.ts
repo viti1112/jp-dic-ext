@@ -10,19 +10,44 @@ export interface ExtensionSettings {
   activationMode: ActivationMode;
   deckName: string;
   reviewBackend: ReviewBackend;
+  /** The user's own Anthropic API key, used only for the optional "example sentence" feature (utils/claude.ts) - never sent anywhere but api.anthropic.com. Empty string means the feature is unconfigured. */
+  claudeApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   activationMode: 'shift',
   deckName: 'Japanese::Mining',
   reviewBackend: 'anki',
+  claudeApiKey: '',
 };
 
 const STORAGE_KEY = 'settings';
 
+const ACTIVATION_MODES: ActivationMode[] = ['shift', 'alt', 'always'];
+const REVIEW_BACKENDS: ReviewBackend[] = ['anki', 'srs'];
+
+/**
+ * Falls back field-by-field to `DEFAULT_SETTINGS` for anything stored that
+ * isn't a value this version of the extension recognizes (e.g. a leftover
+ * value from an older/newer version, or storage corruption) - so one bad
+ * field can't put the rest of settings, or the whole UI, into a broken state.
+ */
+function sanitize(stored: Partial<ExtensionSettings> | undefined): ExtensionSettings {
+  return {
+    activationMode: ACTIVATION_MODES.includes(stored?.activationMode as ActivationMode)
+      ? (stored!.activationMode as ActivationMode)
+      : DEFAULT_SETTINGS.activationMode,
+    deckName: typeof stored?.deckName === 'string' && stored.deckName.trim() ? stored.deckName : DEFAULT_SETTINGS.deckName,
+    reviewBackend: REVIEW_BACKENDS.includes(stored?.reviewBackend as ReviewBackend)
+      ? (stored!.reviewBackend as ReviewBackend)
+      : DEFAULT_SETTINGS.reviewBackend,
+    claudeApiKey: typeof stored?.claudeApiKey === 'string' ? stored.claudeApiKey : DEFAULT_SETTINGS.claudeApiKey,
+  };
+}
+
 export async function getSettings(): Promise<ExtensionSettings> {
   const stored = await browser.storage.sync.get(STORAGE_KEY);
-  return { ...DEFAULT_SETTINGS, ...(stored[STORAGE_KEY] as Partial<ExtensionSettings> | undefined) };
+  return sanitize(stored[STORAGE_KEY] as Partial<ExtensionSettings> | undefined);
 }
 
 export async function updateSettings(patch: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
@@ -35,7 +60,7 @@ export async function updateSettings(patch: Partial<ExtensionSettings>): Promise
 export function onSettingsChanged(callback: (settings: ExtensionSettings) => void): void {
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync' || !(STORAGE_KEY in changes)) return;
-    callback({ ...DEFAULT_SETTINGS, ...(changes[STORAGE_KEY]?.newValue as Partial<ExtensionSettings> | undefined) });
+    callback(sanitize(changes[STORAGE_KEY]?.newValue as Partial<ExtensionSettings> | undefined));
   });
 }
 

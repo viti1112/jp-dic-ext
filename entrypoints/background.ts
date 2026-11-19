@@ -1,17 +1,22 @@
 import { appendAnkiLog } from '@/utils/anki-log.ts';
 import { addNoteToAnki } from '@/utils/anki.ts';
+import { generateExampleSentences } from '@/utils/claude.ts';
 import { openDictionaryDB, seedIfEmpty } from '@/utils/dictionary/db.ts';
 import { lookupAtCursor } from '@/utils/dictionary/lookup.ts';
 import { registerMessageHandlers } from '@/utils/messaging.ts';
+import { getSettings } from '@/utils/settings.ts';
 import { addCardIfNew, countDueCards, getDueCards, openSrsDB, reviewCardById } from '@/utils/srs/db.ts';
 
-export default defineBackground(async () => {
-  // Independent databases - opened in parallel so the (fast) SRS connection
-  // isn't gated behind the dictionary's first-run seed, which can take
-  // several seconds to bulk-insert ~219k entries. Each promise is awaited
-  // separately (not via a single Promise.all) so a dictionary-seeding
-  // failure can't also prevent the SRS handlers from ever registering - the
-  // two subsystems are otherwise unrelated and should fail independently.
+export default defineBackground(() => {
+  // MV3 service workers must register their event listeners synchronously,
+  // during the script's initial (synchronous) evaluation - a listener added
+  // only after an `await` can lose a message that arrives while the worker
+  // is still cold-starting ("Could not establish connection. Receiving end
+  // does not exist."), since Chrome doesn't guarantee it's registered in
+  // time to catch whatever woke the worker up in the first place. So this
+  // function itself stays synchronous, and every handler below awaits its
+  // own readiness promise internally instead of the registration itself
+  // waiting on it.
   const dictionaryReady = (async () => {
     const dictionaryDb = await openDictionaryDB();
     const count = await seedIfEmpty(dictionaryDb, browser.runtime.getURL('/dictionary/jmdict-en.json'));
@@ -21,12 +26,17 @@ export default defineBackground(async () => {
     console.error('Dictionary failed to load - lookups will be unavailable:', error);
     return null;
   });
-  const srsDb = await openSrsDB();
-  const db = await dictionaryReady;
+  const srsReady = openSrsDB();
 
   registerMessageHandlers({
-    lookup: (text, cursorIndex) => (db ? lookupAtCursor(db, text, cursorIndex) : Promise.resolve(null)),
-    getDictionaryCount: () => (db ? db.count('entries') : Promise.resolve(0)),
+    lookup: async (text, cursorIndex) => {
+      const db = await dictionaryReady;
+      return db ? lookupAtCursor(db, text, cursorIndex) : null;
+    },
+    getDictionaryCount: async () => {
+      const db = await dictionaryReady;
+      return db ? db.count('entries') : 0;
+    },
     addToAnki: async (card) => {
       const result = await addNoteToAnki(card);
       if (result.ok) {
@@ -42,9 +52,13 @@ export default defineBackground(async () => {
       }
       return result;
     },
-    addToSrs: (card) => addCardIfNew(srsDb, card),
-    getDueSrsCount: () => countDueCards(srsDb),
-    getDueSrsCards: (limit) => getDueCards(srsDb, limit),
-    reviewSrsCard: (cardId, quality) => reviewCardById(srsDb, cardId, quality),
+    addToSrs: async (card) => addCardIfNew(await srsReady, card),
+    getDueSrsCount: async () => countDueCards(await srsReady),
+    getDueSrsCards: async (limit) => getDueCards(await srsReady, limit),
+    reviewSrsCard: async (cardId, quality) => reviewCardById(await srsReady, cardId, quality),
+    generateExamples: async (headword, reading, gloss) => {
+      const settings = await getSettings();
+      return generateExampleSentences(settings.claudeApiKey, headword, reading, gloss);
+    },
   });
 });

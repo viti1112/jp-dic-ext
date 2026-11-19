@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import type { AddToAnkiResult, AnkiCard } from './anki.ts';
+import type { GenerateExamplesResult } from './claude.ts';
 import type { LookupMatch } from './dictionary/lookup.ts';
 import type { NewSrsCard, ReviewQuality, SrsCard } from './srs/types.ts';
 
@@ -38,6 +39,13 @@ export interface ReviewSrsCardRequestMessage {
   quality: ReviewQuality;
 }
 
+export interface GenerateExamplesRequestMessage {
+  type: 'generateExamples';
+  headword: string;
+  reading: string;
+  gloss: string;
+}
+
 export type ExtensionMessage =
   | LookupRequestMessage
   | AddToAnkiRequestMessage
@@ -45,7 +53,8 @@ export type ExtensionMessage =
   | AddToSrsRequestMessage
   | GetDueSrsCountRequestMessage
   | GetDueSrsCardsRequestMessage
-  | ReviewSrsCardRequestMessage;
+  | ReviewSrsCardRequestMessage
+  | GenerateExamplesRequestMessage;
 
 export interface LookupResponseMessage {
   match: LookupMatch | null;
@@ -78,6 +87,10 @@ export interface ReviewSrsCardResponseMessage {
   card: SrsCard | null;
 }
 
+export interface GenerateExamplesResponseMessage {
+  result: GenerateExamplesResult;
+}
+
 /** One handler per `ExtensionMessage` variant's `type`, so adding a message type is additive here rather than a rewrite. */
 interface MessageHandlers {
   lookup: (text: string, cursorIndex: number) => Promise<LookupMatch | null>;
@@ -87,6 +100,7 @@ interface MessageHandlers {
   getDueSrsCount: () => Promise<number>;
   getDueSrsCards: (limit: number) => Promise<SrsCard[]>;
   reviewSrsCard: (cardId: number, quality: ReviewQuality) => Promise<SrsCard | null>;
+  generateExamples: (headword: string, reading: string, gloss: string) => Promise<GenerateExamplesResult>;
 }
 
 /**
@@ -146,6 +160,12 @@ export async function requestReviewSrsCard(cardId: number, quality: ReviewQualit
   return response?.card ?? null;
 }
 
+export async function requestGenerateExamples(headword: string, reading: string, gloss: string): Promise<GenerateExamplesResult> {
+  const message: GenerateExamplesRequestMessage = { type: 'generateExamples', headword, reading, gloss };
+  const response = (await browser.runtime.sendMessage(message)) as GenerateExamplesResponseMessage | undefined;
+  return response?.result ?? { ok: false, reason: 'unreachable' };
+}
+
 /** Registers the background-side handler for every `ExtensionMessage` variant. */
 export function registerMessageHandlers(handlers: MessageHandlers): void {
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
@@ -203,6 +223,12 @@ export function registerMessageHandlers(handlers: MessageHandlers): void {
           .reviewSrsCard(message.cardId, message.quality)
           .then((card) => sendResponse({ card } satisfies ReviewSrsCardResponseMessage))
           .catch(() => sendResponse({ card: null } satisfies ReviewSrsCardResponseMessage));
+        return true;
+      case 'generateExamples':
+        handlers
+          .generateExamples(message.headword, message.reading, message.gloss)
+          .then((result) => sendResponse({ result } satisfies GenerateExamplesResponseMessage))
+          .catch(() => sendResponse({ result: { ok: false, reason: 'unreachable' } } satisfies GenerateExamplesResponseMessage));
         return true;
       default:
         return undefined;
