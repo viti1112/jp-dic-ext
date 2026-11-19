@@ -15,7 +15,8 @@
     "postinstall": "wxt prepare",
     "build:dictionary": "node scripts/jmdict/parse-jmdict.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "demo:record": "node demo/record.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

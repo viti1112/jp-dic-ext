@@ -4,6 +4,8 @@ A Manifest V3 browser extension that gives you a contextual Japanese dictionary 
 
 Everything runs locally by default: the dictionary lives in IndexedDB (no network calls at lookup time), and the only outbound request this extension makes is to AnkiConnect on `127.0.0.1`. The one opt-in exception is the example-sentence feature, which sends the matched word to Anthropic's API using your own API key if you choose to set one up — nothing else ever leaves the machine.
 
+![Hovering over 読みました with Shift held shows the dictionary-form lookup (読む), then adds it to the mini-SRS queue](./demo/kanjiflow-demo.gif)
+
 ## Features
 
 - **Contextual lookup** — Shift+hover (or Alt / always-on, your choice) over any Japanese text, on any page.
@@ -83,6 +85,7 @@ npm run compile    # type-check
 npm run test       # run the Vitest suite (fast - uses a tiny fixture dictionary, not the real one)
 npm run build      # production build -> .output/chrome-mv3/
 npm run test:e2e   # Playwright smoke test against the built extension in a real Chromium (run npm run build first)
+npm run demo:record # re-records the GIF above (demo/record.mjs) - see its own log output for the ffmpeg conversion step
 ```
 
 See [`CLAUDE.md`](./CLAUDE.md) for a deeper tour of the codebase's structure and the reasoning behind specific design decisions.

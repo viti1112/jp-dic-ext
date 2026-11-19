@@ -30,6 +30,10 @@ playwright-report
 blob-report
 playwright/.cache
 
+# Raw Playwright video from `npm run demo:record` (demo/record.mjs) -
+# demo/kanjiflow-demo.gif, converted from it with ffmpeg, is what's committed.
+demo/video
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
