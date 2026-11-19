@@ -17,7 +17,7 @@ let db: DictionaryDB;
 beforeEach(async () => {
   db = await openDictionaryDB(`test-lookup-${Math.random()}`);
   globalThis.fetch = vi.fn(async () => ({ json: async () => FIXTURE_ENTRIES }) as Response);
-  await seedIfEmpty(db, 'fake://dictionary.json');
+  await seedIfEmpty(db, 'fake://dictionary.json', 'fake://version.json');
 });
 
 describe('lookupAtCursor', () => {

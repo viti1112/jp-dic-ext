@@ -11,6 +11,13 @@ const POPUP_STYLES = `
     position: fixed;
     z-index: 2147483647;
     max-width: 360px;
+    /* A large homograph match (several entries, each with senses and an
+       example) can be taller than a short browser window - without a cap
+       the popup would render past the bottom of the viewport with no way
+       to reach its own lower content, even with show()'s x/y clamping
+       (clamping only repositions the popup, it can't shrink it). */
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
     background: #1e1e1e;
     color: #f0f0f0;
     border-radius: 6px;

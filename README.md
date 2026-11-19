@@ -25,7 +25,8 @@ unpacked extension, with nothing left running in a terminal:
 
 ```bash
 npm install
-npm run build:dictionary   # see "Development" below for the one manual step this needs first
+npm run fetch:dictionary  # downloads JMdict (cross-platform - works on Windows too)
+npm run build:dictionary
 npm run build              # -> .output/chrome-mv3/
 ```
 
@@ -33,10 +34,16 @@ Then in Chrome/Edge: open `chrome://extensions`, enable **Developer mode**
 (top right), click **Load unpacked**, and select the `.output/chrome-mv3/`
 folder. The extension now behaves exactly like one installed from the Chrome
 Web Store - it keeps working after closing the terminal, and survives
-browser restarts. Firefox: `npm run build:firefox` instead, then
-`about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** and pick
-any file inside `.output/firefox-mv3/` (temporary add-ons don't survive a
-Firefox restart - that's a Firefox limitation, not this extension's).
+browser restarts.
+
+**Firefox is not currently a real option**, despite `npm run build:firefox`
+and `dev:firefox` existing: the cursor-detection API this extension's core
+feature depends on (`document.caretRangeFromPoint`) has no Firefox
+implementation (Firefox has a different API, `caretPositionFromPoint`, not
+yet wired up here - see `entrypoints/content.ts`'s top-of-file comment). A
+Firefox build loads and the popup/options/review pages work, but Shift+hover
+lookup - the whole point of the extension - is a silent no-op. Don't rely on
+the Firefox scripts until that's addressed.
 
 `npm run zip` (or `zip:firefox`) packages the same build into a single
 `.output/*.zip` - the format the Chrome Web Store / AMO expect for
@@ -96,18 +103,12 @@ For active development (hot reload on save, instead of the one-time build above)
 
 ```bash
 npm install
-npm run build:dictionary   # downloads nothing itself - see below for the one manual step
+npm run fetch:dictionary   # downloads JMdict's raw XML (cross-platform, no curl/gunzip needed)
+npm run build:dictionary   # parses it into public/dictionary/jmdict-en.json
 npm run dev                # opens Chrome with the extension loaded, rebuilds on save
 ```
 
-`npm run build:dictionary` regenerates the bundled dictionary from JMdict's XML. It needs the raw source first:
-
-```bash
-mkdir -p data/raw
-curl -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
-gunzip data/raw/JMdict_e.gz
-npm run build:dictionary
-```
+`npm run fetch:dictionary` (`scripts/jmdict/fetch-jmdict.mjs`) and `npm run build:dictionary` (`scripts/jmdict/parse-jmdict.ts`) are both plain Node scripts - no shell-specific commands, so they work the same on Windows, macOS, and Linux.
 
 Other useful commands:
 

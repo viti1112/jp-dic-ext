@@ -1,9 +1,14 @@
 import { entryDisplayFields } from './dictionary/display.ts';
 import type { DictionaryEntry } from './dictionary/types.ts';
-import { parseJsonBody } from './http.ts';
+import { fetchWithTimeout, parseJsonBody } from './http.ts';
 
 const ANKI_CONNECT_URL = 'http://127.0.0.1:8765';
 const ANKI_CONNECT_VERSION = 6;
+// AnkiConnect is localhost - a healthy reply is near-instant, so this is
+// generous headroom, not a realistic expected wait. Without it, a frozen
+// Anki process (not crashed, not refusing the connection - just hung) would
+// leave the add-card button on "..." forever.
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface AnkiCard {
   deckName: string;
@@ -47,21 +52,25 @@ async function parseAnkiConnectResponse(response: Response): Promise<AnkiConnect
 export async function addNoteToAnki(card: AnkiCard): Promise<AddToAnkiResult> {
   let response: Response;
   try {
-    response = await fetch(ANKI_CONNECT_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'addNote',
-        version: ANKI_CONNECT_VERSION,
-        params: {
-          note: {
-            deckName: card.deckName,
-            modelName: card.modelName,
-            fields: card.fields,
-            tags: card.tags ?? [],
+    response = await fetchWithTimeout(
+      ANKI_CONNECT_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'addNote',
+          version: ANKI_CONNECT_VERSION,
+          params: {
+            note: {
+              deckName: card.deckName,
+              modelName: card.modelName,
+              fields: card.fields,
+              tags: card.tags ?? [],
+            },
           },
-        },
-      }),
-    });
+        }),
+      },
+      REQUEST_TIMEOUT_MS,
+    );
   } catch {
     return { ok: false, reason: 'unreachable' };
   }
@@ -77,10 +86,14 @@ export async function addNoteToAnki(card: AnkiCard): Promise<AddToAnkiResult> {
 /** True if AnkiConnect answered at all - same "can't tell CORS from not-running" caveat as `addNoteToAnki`. */
 export async function pingAnkiConnect(): Promise<boolean> {
   try {
-    const response = await fetch(ANKI_CONNECT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'version', version: ANKI_CONNECT_VERSION }),
-    });
+    const response = await fetchWithTimeout(
+      ANKI_CONNECT_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action: 'version', version: ANKI_CONNECT_VERSION }),
+      },
+      REQUEST_TIMEOUT_MS,
+    );
     const body = await parseAnkiConnectResponse(response);
     return body !== null && body.error == null;
   } catch {

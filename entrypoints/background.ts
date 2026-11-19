@@ -24,7 +24,11 @@ export default defineBackground(() => {
   // handler to also null-check and fall back by hand.
   const dictionaryReady = (async () => {
     const dictionaryDb = await openDictionaryDB();
-    const count = await seedIfEmpty(dictionaryDb, browser.runtime.getURL('/dictionary/jmdict-en.json'));
+    const count = await seedIfEmpty(
+      dictionaryDb,
+      browser.runtime.getURL('/dictionary/jmdict-en.json'),
+      browser.runtime.getURL('/dictionary/version.json'),
+    );
     console.log(`Dictionary ready: ${count} entries.`);
     return dictionaryDb;
   })();

@@ -30,10 +30,39 @@ describe('generateExampleSentences', () => {
   });
 
   it('caps at 2 sentences even if the model returns more', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: 'A\nB\nC\nD' }] })));
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: '本。\n新聞。\n手紙。\n本当。' }] })));
 
     const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
-    expect(result).toEqual({ ok: true, sentences: ['A', 'B'] });
+    expect(result).toEqual({ ok: true, sentences: ['本。', '新聞。'] });
+  });
+
+  it('strips numbering/bullets/bold markdown the model adds despite being asked for plain lines', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: '1. 本を読む。\n- **毎日**新聞を読みます。' }] })),
+    );
+
+    const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
+    expect(result).toEqual({ ok: true, sentences: ['本を読む。', '毎日新聞を読みます。'] });
+  });
+
+  it('drops lines with no actual Japanese text (e.g. a stray English caveat)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ content: [{ type: 'text', text: 'Here are two sentences:\n本を読む。\n毎日新聞を読みます。' }] }),
+      ),
+    );
+
+    const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
+    expect(result).toEqual({ ok: true, sentences: ['本を読む。', '毎日新聞を読みます。'] });
+  });
+
+  it('reports rejected when every line comes back with no Japanese text at all', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: "Sorry, I can't help with that." }] })));
+
+    const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
+    expect(result).toEqual({ ok: false, reason: 'rejected', message: 'Empty response.' });
   });
 
   it('reports unreachable when fetch itself throws (offline, CORS, ...)', async () => {

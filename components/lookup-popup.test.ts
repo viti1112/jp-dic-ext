@@ -156,6 +156,17 @@ describe('LookupPopup', () => {
     vi.unstubAllGlobals();
   });
 
+  it('caps its own height to the viewport and scrolls internally, rather than overflowing off-screen', () => {
+    new LookupPopup(
+      () => '+ Anki',
+      async () => ({ ok: true }),
+      noExamples,
+    );
+    const style = document.documentElement.querySelector('div')!.shadowRoot!.querySelector('style')!.textContent!;
+    expect(style).toMatch(/max-height:\s*calc\(100vh/);
+    expect(style).toMatch(/overflow-y:\s*auto/);
+  });
+
   it('clicking "Пример" calls onExample and renders the sentences, then removes the button', async () => {
     const onExample = vi.fn(async () => ({ ok: true as const, sentences: ['本を読む。', '新聞を読みます。'] }));
     const popup = new LookupPopup(

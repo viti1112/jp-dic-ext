@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 import type { DictionaryEntry, Sense } from '../../utils/dictionary/types.ts';
 
@@ -95,9 +96,19 @@ function main() {
 
   const entries = rawEntries.map(parseEntry);
 
+  const dictionaryJson = JSON.stringify(entries);
   mkdirSync(dirname(OUT_DICTIONARY), { recursive: true });
-  writeFileSync(OUT_DICTIONARY, JSON.stringify(entries));
+  writeFileSync(OUT_DICTIONARY, dictionaryJson);
   console.log(`Wrote ${entries.length} entries to ${OUT_DICTIONARY}`);
+
+  // A hash of the dictionary's own content - not a JMdict release version
+  // (the raw XML doesn't carry one we can rely on), but enough to tell
+  // `seedIfEmpty()` whether a user's already-seeded copy matches what's
+  // bundled now, without re-downloading the full ~40 MB file just to check.
+  const version = createHash('sha256').update(dictionaryJson).digest('hex').slice(0, 16);
+  const versionPath = join(dirname(OUT_DICTIONARY), 'version.json');
+  writeFileSync(versionPath, JSON.stringify({ version, entryCount: entries.length }));
+  console.log(`Wrote dictionary version ${version} to ${versionPath}`);
 
   mkdirSync(dirname(OUT_POS_TAGS), { recursive: true });
   writeFileSync(OUT_POS_TAGS, JSON.stringify(tagDescriptions, null, 2));

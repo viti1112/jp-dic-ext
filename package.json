@@ -13,6 +13,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
+    "fetch:dictionary": "node scripts/jmdict/fetch-jmdict.mjs",
     "build:dictionary": "node scripts/jmdict/parse-jmdict.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
