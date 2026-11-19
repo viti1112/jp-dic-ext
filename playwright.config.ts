@@ -6,10 +6,11 @@ import { defineConfig } from '@playwright/test';
 // doesn't load/the page crashes on open" regressions unit tests can't see.
 export default defineConfig({
   testDir: './e2e',
-  // The dictionary-seeding test needs headroom for a cold ~219k-entry bulk
-  // insert on a brand-new profile, well past Playwright's 30s default.
+  // Every test gets its own fresh browser profile (see e2e/fixtures.ts), so
+  // each one that touches the dictionary pays the full cold ~219k-entry seed
+  // cost independently - well past Playwright's 30s default.
   timeout: 90_000,
-  fullyParallel: false, // all tests share one persistent browser context/profile
+  fullyParallel: false, // sequential, one at a time - keeps CI output readable and avoids N parallel cold dictionary seeds competing for CPU
   workers: 1,
   reporter: 'list',
 });

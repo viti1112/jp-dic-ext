@@ -61,6 +61,12 @@ async function locateChar(page: Page, selector: string, search: string): Promise
  * seed time on a cold profile varies with machine load, so a fixed delay
  * would be flaky. Leaves Shift held on success.
  *
+ * Each test gets its own fresh browser profile (see fixtures.ts), so this
+ * isn't a cache hit off an earlier test's already-seeded dictionary - the
+ * full cold-seed cost (same one `requestDictionaryCount` polls up to 60s for
+ * elsewhere in this file) applies independently every time, so the retry
+ * budget here needs to match that, not just cover a quick UI render.
+ *
  * Nudges by 1px *vertically* between attempts (not horizontally): a
  * horizontal nudge risks crossing into the next character's glyph on a
  * `target.x` that was already right at a character boundary, moving
@@ -72,7 +78,7 @@ async function locateChar(page: Page, selector: string, search: string): Promise
  */
 async function hoverWithShiftUntilVisible(page: Page, target: { x: number; y: number }): Promise<void> {
   const headword = page.locator('.headword').first();
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     await page.keyboard.down('Shift');
     await page.mouse.move(target.x, target.y + (attempt % 2), { steps: 5 });
     await page.waitForTimeout(1000);
