@@ -9,8 +9,10 @@
 // point this at a system one: PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium.
 import { chromium } from '@playwright/test';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import fs from 'node:fs';
 
 const EXTENSION_PATH = fileURLToPath(new URL('../.output/chrome-mv3', import.meta.url));
@@ -25,7 +27,12 @@ const server = createServer(async (_req, res) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const demoPageUrl = `http://127.0.0.1:${server.address().port}/`;
 
-const context = await chromium.launchPersistentContext('', {
+// A fresh temp profile every run (not '' - see e2e/fixtures.ts's comment on
+// the same thing) so this always records the mini-SRS queue from a clean
+// state (one card, the one just added) rather than whatever accumulated in
+// a reused profile from earlier runs.
+const userDataDir = await mkdtemp(join(tmpdir(), 'kanjiflow-demo-'));
+const context = await chromium.launchPersistentContext(userDataDir, {
   headless: false,
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
   viewport: { width: 900, height: 420 },

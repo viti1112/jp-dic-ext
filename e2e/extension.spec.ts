@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 
 test('the popup opens and shows a non-zero dictionary count once seeded', async ({ context, extensionId }) => {
@@ -36,4 +37,134 @@ test('the review page opens without crashing when there are no due cards', async
   await page.goto(`chrome-extension://${extensionId}/review.html`);
 
   await expect(page.locator('.brand')).toBeVisible();
+});
+
+/** Finds the pixel center of the first character at `search` within `selector`'s own (direct) text node, via the Range API - precise rather than guessing coordinates from font metrics. */
+async function locateChar(page: Page, selector: string, search: string): Promise<{ x: number; y: number }> {
+  return page.evaluate(
+    ({ selector, search }) => {
+      const node = document.querySelector(selector)!.firstChild!;
+      const start = node.textContent!.indexOf(search);
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + 1);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    },
+    { selector, search },
+  );
+}
+
+/**
+ * Holds Shift and nudges the mouse onto `target` repeatedly until the
+ * dictionary popup actually shows a headword - the ~219k-entry dictionary's
+ * seed time on a cold profile varies with machine load, so a fixed delay
+ * would be flaky. Leaves Shift held on success.
+ *
+ * Nudges by 1px *vertically* between attempts (not horizontally): a
+ * horizontal nudge risks crossing into the next character's glyph on a
+ * `target.x` that was already right at a character boundary, moving
+ * `cursorIndex` one character to the right - which `lookupAtCursor`'s
+ * forward-only search (see CLAUDE.md) then can't see past, matching a
+ * shorter/different real word instead of the one this is supposed to hover.
+ * A small vertical nudge still forces a fresh `mousemove` event each retry
+ * without risking that.
+ */
+async function hoverWithShiftUntilVisible(page: Page, target: { x: number; y: number }): Promise<void> {
+  const headword = page.locator('.headword').first();
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await page.keyboard.down('Shift');
+    await page.mouse.move(target.x, target.y + (attempt % 2), { steps: 5 });
+    await page.waitForTimeout(1000);
+    if (await headword.isVisible().catch(() => false)) return;
+    await page.keyboard.up('Shift');
+  }
+  throw new Error('Dictionary popup never appeared - is the dictionary still seeding?');
+}
+
+test('Shift+hover over conjugated text shows the deinflected dictionary entry', async ({ context, demoUrl }) => {
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50); // start away from the text
+  await hoverWithShiftUntilVisible(page, target);
+  await page.keyboard.up('Shift');
+
+  await expect(page.locator('.headword').first()).toHaveText('読む');
+  await expect(page.locator('.reading').first()).toHaveText('よむ');
+});
+
+test('pinning a match, adding it to the mini-SRS queue, and reviewing it works end to end', async ({ context, extensionId, demoUrl }) => {
+  // Switch to the mini-SRS backend via the real options UI - AnkiConnect
+  // isn't running in this environment, and the add-card button's behavior
+  // depends on this setting, same as a real user toggling it.
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+  await options.click('#backend-segmented button[data-backend="srs"]');
+  await options.waitForTimeout(300);
+  await options.close();
+
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverWithShiftUntilVisible(page, target);
+
+  // Click to pin (still holding Shift, as the content script requires).
+  await page.mouse.click(target.x, target.y);
+  await page.keyboard.up('Shift');
+  await expect(page.locator('.headword').first()).toHaveText('読む'); // pinning must not change which entry is showing
+
+  const addButton = page.locator('.add-btn').first();
+  await expect(addButton).toBeVisible();
+  await addButton.click();
+  await expect(addButton).toHaveText('✓ Added', { timeout: 10_000 });
+  await page.close();
+
+  const review = await context.newPage();
+  await review.goto(`chrome-extension://${extensionId}/review.html`);
+  await expect(review.locator('.headword')).toContainText('読む');
+
+  await review.click('#reveal');
+  await expect(review.locator('.reading')).toHaveText('よむ');
+
+  await review.click('.rate-btn[data-quality="good"]');
+  // A freshly-reviewed card's dueAt moves into the future, so the queue
+  // empties rather than looping back to the same card.
+  await expect(review.locator('.empty-state')).toBeVisible({ timeout: 10_000 });
+});
+
+test('click-to-pin does not hijack a real link click', async ({ context, demoUrl }) => {
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#link', '猫');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverWithShiftUntilVisible(page, target); // 猫 ("cat") is a real dictionary word, so a popup is expected here too
+
+  // Holding Shift while clicking a link is itself a native browser gesture
+  // (open in a new window) - unrelated to this extension, but it means a
+  // successful native click here opens a *second* page rather than
+  // navigating the current one, so that's what proves preventDefault()
+  // wasn't called.
+  const newPagePromise = context.waitForEvent('page');
+  await page.mouse.click(target.x, target.y);
+
+  // isInteractiveElement() must have made the content script back off and
+  // let the native <a> click through, instead of preventDefault()-ing it to
+  // pin the popup - the normal page behavior (opening the link) takes
+  // priority over the lookup feature for an actual link.
+  const newPage = await newPagePromise;
+  await expect(newPage).toHaveURL(/#visited$/);
+  await newPage.close();
+
+  // If the click had pinned the popup on the original page instead,
+  // show()/hide() would both be no-ops until Escape - releasing Shift
+  // (checked before anything else in the mousemove handler) should hide it
+  // normally, proving it never pinned.
+  await page.keyboard.up('Shift');
+  await page.mouse.move(target.x, target.y - 1, { steps: 2 });
+  await expect(page.locator('.headword').first()).toBeHidden();
 });
