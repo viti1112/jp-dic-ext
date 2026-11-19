@@ -46,7 +46,7 @@ jobs:
           npm run fetch:dictionary
           npm run build:dictionary
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chrome-mv3
           path: .output/chrome-mv3
@@ -62,7 +62,7 @@ jobs:
           node-version: '26'
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: chrome-mv3
           path: .output/chrome-mv3
