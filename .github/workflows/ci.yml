@@ -15,6 +15,21 @@ jobs:
           node-version: '26'
           cache: npm
       - run: npm ci
+      # EDRDG's FTP mirror is a small academic server that intermittently
+      # times out or rate-limits CI traffic (seen repeatedly from GitHub
+      # Actions' IP ranges) - caching the raw XML means most runs reuse a
+      # previously-fetched copy instead of depending on that server being up
+      # right now. The key rotates monthly so this isn't stuck on a stale
+      # file forever, with no `restore-keys` fallback to an older month: a
+      # too-old JMdict is still a real file the pipeline can build and test
+      # against, but silently falling back to one from months ago would mask
+      # this cache ever going stale rather than just re-fetching.
+      - id: jmdict-cache-key
+        run: echo "key=jmdict-raw-$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: data/raw/JMdict_e
+          key: ${{ steps.jmdict-cache-key.outputs.key }}
       # The real dictionary isn't committed (see CLAUDE.md): npm run test
       # itself doesn't need it (every utils/dictionary/*.test.ts seeds a
       # tiny fixture instead), but npm run compile does - entrypoints/
@@ -26,7 +41,7 @@ jobs:
       # touches the file).
       - name: Fetch JMdict and build the dictionary
         run: |
-          npm run fetch:dictionary
+          [ -f data/raw/JMdict_e ] || npm run fetch:dictionary
           npm run build:dictionary
           npx wxt prepare
       - run: npm run compile
@@ -41,9 +56,15 @@ jobs:
           node-version: '26'
           cache: npm
       - run: npm ci
+      - id: jmdict-cache-key
+        run: echo "key=jmdict-raw-$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: data/raw/JMdict_e
+          key: ${{ steps.jmdict-cache-key.outputs.key }}
       - name: Fetch JMdict and build the dictionary
         run: |
-          npm run fetch:dictionary
+          [ -f data/raw/JMdict_e ] || npm run fetch:dictionary
           npm run build:dictionary
       - run: npm run build
       - uses: actions/upload-artifact@v7
