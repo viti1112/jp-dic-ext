@@ -127,6 +127,27 @@ describe('LookupPopup', () => {
     expect(container.querySelectorAll('.add-btn')).toHaveLength(2);
   });
 
+  it('clamps position so the popup never renders off-screen', () => {
+    const popup = new LookupPopup(
+      () => '+ Anki',
+      async () => ({ ok: true }),
+    );
+    const container = getPopupElement();
+    Object.defineProperty(container, 'offsetWidth', { value: 360, configurable: true });
+    Object.defineProperty(container, 'offsetHeight', { value: 150, configurable: true });
+    vi.stubGlobal('innerWidth', 800);
+    vi.stubGlobal('innerHeight', 600);
+
+    // Near the bottom-right corner - unclamped this would put the popup
+    // partly off-screen (x + 360 > 800, y + 20 + 150 > 600).
+    popup.show(MATCH, 790, 590);
+
+    expect(parseInt(container.style.left)).toBe(800 - 360);
+    expect(parseInt(container.style.top)).toBe(600 - 150);
+
+    vi.unstubAllGlobals();
+  });
+
   it('speaking a word calls speechSynthesis with the reading, not the kanji', () => {
     const spoken: { text: string; lang: string }[] = [];
     vi.stubGlobal('speechSynthesis', {

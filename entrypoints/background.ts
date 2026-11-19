@@ -6,22 +6,27 @@ import { registerMessageHandlers } from '@/utils/messaging.ts';
 import { addCardIfNew, countDueCards, getDueCards, openSrsDB, reviewCardById } from '@/utils/srs/db.ts';
 
 export default defineBackground(async () => {
-  // Independent databases - open them in parallel so the (fast) SRS
-  // connection and its message handlers aren't gated behind the dictionary's
-  // first-run seed, which can take several seconds to bulk-insert ~219k entries.
-  const [db, srsDb] = await Promise.all([
-    (async () => {
-      const dictionaryDb = await openDictionaryDB();
-      const count = await seedIfEmpty(dictionaryDb, browser.runtime.getURL('/dictionary/jmdict-en.json'));
-      console.log(`Dictionary ready: ${count} entries.`);
-      return dictionaryDb;
-    })(),
-    openSrsDB(),
-  ]);
+  // Independent databases - opened in parallel so the (fast) SRS connection
+  // isn't gated behind the dictionary's first-run seed, which can take
+  // several seconds to bulk-insert ~219k entries. Each promise is awaited
+  // separately (not via a single Promise.all) so a dictionary-seeding
+  // failure can't also prevent the SRS handlers from ever registering - the
+  // two subsystems are otherwise unrelated and should fail independently.
+  const dictionaryReady = (async () => {
+    const dictionaryDb = await openDictionaryDB();
+    const count = await seedIfEmpty(dictionaryDb, browser.runtime.getURL('/dictionary/jmdict-en.json'));
+    console.log(`Dictionary ready: ${count} entries.`);
+    return dictionaryDb;
+  })().catch((error: unknown) => {
+    console.error('Dictionary failed to load - lookups will be unavailable:', error);
+    return null;
+  });
+  const srsDb = await openSrsDB();
+  const db = await dictionaryReady;
 
   registerMessageHandlers({
-    lookup: (text, cursorIndex) => lookupAtCursor(db, text, cursorIndex),
-    getDictionaryCount: () => db.count('entries'),
+    lookup: (text, cursorIndex) => (db ? lookupAtCursor(db, text, cursorIndex) : Promise.resolve(null)),
+    getDictionaryCount: () => (db ? db.count('entries') : Promise.resolve(0)),
     addToAnki: async (card) => {
       const result = await addNoteToAnki(card);
       if (result.ok) {

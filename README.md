@@ -67,7 +67,7 @@ npm run dev                # opens Chrome with the extension loaded
 
 ```bash
 mkdir -p data/raw
-curl -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+curl -o data/raw/JMdict_e.gz https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
 gunzip data/raw/JMdict_e.gz
 npm run build:dictionary
 ```

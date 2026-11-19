@@ -27,7 +27,7 @@ jobs:
       - name: Fetch JMdict and build the dictionary
         run: |
           mkdir -p data/raw
-          curl -sL -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+          curl -sL -o data/raw/JMdict_e.gz https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
           gunzip data/raw/JMdict_e.gz
           npm run build:dictionary
           npx wxt prepare
@@ -46,7 +46,7 @@ jobs:
       - name: Fetch JMdict and build the dictionary
         run: |
           mkdir -p data/raw
-          curl -sL -o data/raw/JMdict_e.gz http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+          curl -sL -o data/raw/JMdict_e.gz https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
           gunzip data/raw/JMdict_e.gz
           npm run build:dictionary
       - run: npm run build

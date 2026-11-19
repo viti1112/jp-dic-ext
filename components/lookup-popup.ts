@@ -103,9 +103,18 @@ export class LookupPopup {
   show(match: LookupMatch, x: number, y: number): void {
     if (this.pinned) return;
     this.container.replaceChildren(...renderMatch(match, this.getButtonLabel, this.onAdd));
-    this.container.style.left = `${x}px`;
-    this.container.style.top = `${y + 20}px`;
+    // Render off-screen first to measure the popup's actual size (depends on
+    // how much text this particular match has) before clamping x/y to the
+    // viewport - otherwise a popup near the right or bottom edge would
+    // render partly or fully off-screen, unreachable to click.
+    this.container.style.left = '0px';
+    this.container.style.top = '0px';
     this.container.style.display = 'block';
+    const { offsetWidth, offsetHeight } = this.container;
+    const clampedX = Math.max(0, Math.min(x, window.innerWidth - offsetWidth));
+    const clampedY = Math.max(0, Math.min(y + 20, window.innerHeight - offsetHeight));
+    this.container.style.left = `${clampedX}px`;
+    this.container.style.top = `${clampedY}px`;
   }
 
   hide(): void {
