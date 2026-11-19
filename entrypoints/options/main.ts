@@ -1,3 +1,4 @@
+import '@/components/fonts.css';
 import './style.css';
 import { getClaudeApiKey, setClaudeApiKey } from '@/utils/claude-settings.ts';
 import type { ActivationMode, ReviewBackend } from '@/utils/settings.ts';

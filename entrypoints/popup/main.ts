@@ -1,3 +1,4 @@
+import '@/components/fonts.css';
 import './style.css';
 import { pingAnkiConnect } from '@/utils/anki.ts';
 import { getAnkiLog } from '@/utils/anki-log.ts';
