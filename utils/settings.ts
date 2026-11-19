@@ -10,15 +10,12 @@ export interface ExtensionSettings {
   activationMode: ActivationMode;
   deckName: string;
   reviewBackend: ReviewBackend;
-  /** The user's own Anthropic API key, used only for the optional "example sentence" feature (utils/claude.ts) - never sent anywhere but api.anthropic.com. Empty string means the feature is unconfigured. */
-  claudeApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   activationMode: 'shift',
   deckName: 'Japanese::Mining',
   reviewBackend: 'anki',
-  claudeApiKey: '',
 };
 
 const STORAGE_KEY = 'settings';
@@ -41,7 +38,6 @@ function sanitize(stored: Partial<ExtensionSettings> | undefined): ExtensionSett
     reviewBackend: REVIEW_BACKENDS.includes(stored?.reviewBackend as ReviewBackend)
       ? (stored!.reviewBackend as ReviewBackend)
       : DEFAULT_SETTINGS.reviewBackend,
-    claudeApiKey: typeof stored?.claudeApiKey === 'string' ? stored.claudeApiKey : DEFAULT_SETTINGS.claudeApiKey,
   };
 }
 

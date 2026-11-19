@@ -1,5 +1,6 @@
 import { entryDisplayFields } from './dictionary/display.ts';
 import type { DictionaryEntry } from './dictionary/types.ts';
+import { parseJsonBody } from './http.ts';
 
 const ANKI_CONNECT_URL = 'http://127.0.0.1:8765';
 const ANKI_CONNECT_VERSION = 6;
@@ -32,18 +33,13 @@ interface AnkiConnectResponse {
 /**
  * Parses and validates an AnkiConnect response body - `null` if the body
  * isn't valid JSON, or isn't the `{result, error}` shape AnkiConnect always
- * replies with (e.g. some other local service answered on that port). Kept
- * separate from `fetch()`'s own try/catch so a malformed response is
- * distinguished from a network-level failure, rather than silently treated
- * as either an unexplained crash or - worse - a false success.
+ * replies with (e.g. some other local service answered on that port) - so a
+ * malformed response is distinguished from a network-level failure, rather
+ * than silently treated as either an unexplained crash or - worse - a false
+ * success.
  */
 async function parseAnkiConnectResponse(response: Response): Promise<AnkiConnectResponse | null> {
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    return null;
-  }
+  const body = await parseJsonBody<unknown>(response);
   if (typeof body !== 'object' || body === null || !('result' in body) || !('error' in body)) return null;
   return body as AnkiConnectResponse;
 }

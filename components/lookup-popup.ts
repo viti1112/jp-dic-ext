@@ -239,11 +239,28 @@ function renderSpeakButton(text: string): HTMLButtonElement {
   return button;
 }
 
+function errorMessageFor(result: Exclude<GenerateExamplesResult, { ok: true }>): string {
+  switch (result.reason) {
+    case 'no-api-key':
+      return 'Добавьте ключ Anthropic API в настройках расширения.';
+    case 'unreachable':
+      return 'Не удалось связаться с Claude API.';
+    case 'rejected':
+      return result.message;
+  }
+}
+
 function renderExampleButton(entry: DictionaryEntry, onExample: GenerateExamplesHandler, examplesEl: HTMLDivElement): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'example-btn';
   button.textContent = 'Пример';
+
+  const resetWithError = (message: string) => {
+    button.disabled = false;
+    button.textContent = 'Пример';
+    examplesEl.textContent = message;
+  };
 
   button.addEventListener('click', (event) => {
     event.stopPropagation(); // same reason as the other buttons: don't let this double as a pin-click
@@ -257,21 +274,10 @@ function renderExampleButton(entry: DictionaryEntry, onExample: GenerateExamples
           examplesEl.textContent = result.sentences.join(' / ');
           button.remove(); // no point asking Claude twice for the same entry
         } else {
-          button.disabled = false;
-          button.textContent = 'Пример';
-          examplesEl.textContent =
-            result.reason === 'no-api-key'
-              ? 'Добавьте ключ Anthropic API в настройках расширения.'
-              : result.reason === 'unreachable'
-                ? 'Не удалось связаться с Claude API.'
-                : result.message;
+          resetWithError(errorMessageFor(result));
         }
       })
-      .catch(() => {
-        button.disabled = false;
-        button.textContent = 'Пример';
-        examplesEl.textContent = 'Не удалось связаться с фоновым процессом расширения.';
-      });
+      .catch(() => resetWithError('Не удалось связаться с фоновым процессом расширения.'));
   });
 
   return button;

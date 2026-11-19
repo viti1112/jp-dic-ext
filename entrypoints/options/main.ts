@@ -1,4 +1,5 @@
 import './style.css';
+import { getClaudeApiKey, setClaudeApiKey } from '@/utils/claude-settings.ts';
 import type { ActivationMode, ReviewBackend } from '@/utils/settings.ts';
 import { getSettings, updateSettings } from '@/utils/settings.ts';
 
@@ -52,7 +53,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <input id="claude-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" />
         <button type="button" class="icon-btn" id="toggle-key-visibility">Показать</button>
       </div>
-      <p class="section-help">Опционально. Хранится только локально (chrome.storage.sync) и используется исключительно для запросов к api.anthropic.com из кнопки «Пример» на карточке слова.</p>
+      <p class="section-help">Опционально. Хранится только на этом устройстве (chrome.storage.local, не синхронизируется с другими устройствами) и используется исключительно для запросов к api.anthropic.com из кнопки «Пример» на карточке слова.</p>
       <p class="save-hint" id="claude-key-hint"></p>
     </section>
   </div>
@@ -113,7 +114,7 @@ let hintTimeout: ReturnType<typeof setTimeout> | undefined;
 
 claudeKeyInput.addEventListener('change', () => {
   const next = claudeKeyInput.value.trim();
-  void updateSettings({ claudeApiKey: next }).then(() => {
+  void setClaudeApiKey(next).then(() => {
     claudeKeyHint.textContent = next ? 'Сохранено.' : 'Ключ удалён — кнопка «Пример» будет недоступна.';
     clearTimeout(hintTimeout);
     hintTimeout = setTimeout(() => {
@@ -134,7 +135,7 @@ async function init() {
   setActiveBackend(settings.reviewBackend);
   currentDeckName = settings.deckName;
   deckInput.value = settings.deckName;
-  claudeKeyInput.value = settings.claudeApiKey;
+  claudeKeyInput.value = await getClaudeApiKey();
 }
 
 void init();

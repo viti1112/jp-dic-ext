@@ -58,7 +58,7 @@ describe('generateExampleSentences', () => {
     expect(result).toEqual({ ok: false, reason: 'rejected', message: 'invalid x-api-key' });
   });
 
-  it('reports unreachable when the response body is not valid JSON', async () => {
+  it('reports rejected (not unreachable) when a 200 response body is not valid JSON', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -71,7 +71,23 @@ describe('generateExampleSentences', () => {
     );
 
     const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
-    expect(result).toEqual({ ok: false, reason: 'unreachable' });
+    expect(result).toEqual({ ok: false, reason: 'rejected', message: 'Could not parse the API response.' });
+  });
+
+  it('reports rejected (not unreachable) for a non-OK response with a non-JSON body, e.g. an outage HTML page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => {
+          throw new SyntaxError('Unexpected token');
+        },
+      })),
+    );
+
+    const result = await generateExampleSentences('sk-test', '読む', 'よむ', 'to read');
+    expect(result).toEqual({ ok: false, reason: 'rejected', message: 'HTTP 503' });
   });
 
   it('sends the api key and model in the request', async () => {
