@@ -17,6 +17,35 @@ Everything runs locally by default: the dictionary lives in IndexedDB (no networ
 - **Example sentences (optional)** — a "Пример" button asks Claude for a couple of natural example sentences using the matched word, if you've added your own Anthropic API key in the options page.
 - **Toolbar popup + options page** — the popup shows AnkiConnect connectivity / due-card count and recently-added cards at a glance; the activation key, deck name, Anki/mini-SRS mode, and Claude API key live on a dedicated options page (gear icon in the popup).
 
+## Installation (as a regular extension)
+
+The extension doesn't need `npm run dev` running to work - that's only for
+active development (hot reload on save). To install it like any other
+unpacked extension, with nothing left running in a terminal:
+
+```bash
+npm install
+npm run build:dictionary   # see "Development" below for the one manual step this needs first
+npm run build              # -> .output/chrome-mv3/
+```
+
+Then in Chrome/Edge: open `chrome://extensions`, enable **Developer mode**
+(top right), click **Load unpacked**, and select the `.output/chrome-mv3/`
+folder. The extension now behaves exactly like one installed from the Chrome
+Web Store - it keeps working after closing the terminal, and survives
+browser restarts. Firefox: `npm run build:firefox` instead, then
+`about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** and pick
+any file inside `.output/firefox-mv3/` (temporary add-ons don't survive a
+Firefox restart - that's a Firefox limitation, not this extension's).
+
+`npm run zip` (or `zip:firefox`) packages the same build into a single
+`.output/*.zip` - the format the Chrome Web Store / AMO expect for
+publishing, or just a convenient way to hand the built extension to someone
+else without the source tree.
+
+Rebuilding later (e.g. after `git pull`) just needs `npm run build` again,
+then **Reload** on the extension's card in `chrome://extensions`.
+
 ## Architecture
 
 ```mermaid
@@ -63,10 +92,12 @@ The background service worker is the only context that holds the two IndexedDB c
 
 ## Development
 
+For active development (hot reload on save, instead of the one-time build above):
+
 ```bash
 npm install
 npm run build:dictionary   # downloads nothing itself - see below for the one manual step
-npm run dev                # opens Chrome with the extension loaded
+npm run dev                # opens Chrome with the extension loaded, rebuilds on save
 ```
 
 `npm run build:dictionary` regenerates the bundled dictionary from JMdict's XML. It needs the raw source first:
