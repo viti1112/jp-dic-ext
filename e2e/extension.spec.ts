@@ -56,10 +56,11 @@ async function locateChar(page: Page, selector: string, search: string): Promise
 }
 
 /**
- * Holds Shift and nudges the mouse onto `target` repeatedly until the
+ * Holds `modifierKey` (or holds nothing, for `activationMode: 'always'` -
+ * pass `null`) and nudges the mouse onto `target` repeatedly until the
  * dictionary popup actually shows a headword - the ~219k-entry dictionary's
  * seed time on a cold profile varies with machine load, so a fixed delay
- * would be flaky. Leaves Shift held on success.
+ * would be flaky. Leaves the key held (if any) on success.
  *
  * Each test gets its own fresh browser profile (see fixtures.ts), so this
  * isn't a cache hit off an earlier test's already-seeded dictionary - the
@@ -76,14 +77,14 @@ async function locateChar(page: Page, selector: string, search: string): Promise
  * A small vertical nudge still forces a fresh `mousemove` event each retry
  * without risking that.
  */
-async function hoverWithShiftUntilVisible(page: Page, target: { x: number; y: number }): Promise<void> {
+async function hoverUntilVisible(page: Page, target: { x: number; y: number }, modifierKey: 'Shift' | 'Alt' | null): Promise<void> {
   const headword = page.locator('.headword').first();
   for (let attempt = 0; attempt < 60; attempt++) {
-    await page.keyboard.down('Shift');
+    if (modifierKey) await page.keyboard.down(modifierKey);
     await page.mouse.move(target.x, target.y + (attempt % 2), { steps: 5 });
     await page.waitForTimeout(1000);
     if (await headword.isVisible().catch(() => false)) return;
-    await page.keyboard.up('Shift');
+    if (modifierKey) await page.keyboard.up(modifierKey);
   }
   throw new Error('Dictionary popup never appeared - is the dictionary still seeding?');
 }
@@ -94,7 +95,7 @@ test('Shift+hover over conjugated text shows the deinflected dictionary entry', 
 
   const target = await locateChar(page, '#text', '読みました');
   await page.mouse.move(target.x, target.y - 50); // start away from the text
-  await hoverWithShiftUntilVisible(page, target);
+  await hoverUntilVisible(page, target, 'Shift');
   await page.keyboard.up('Shift');
 
   await expect(page.locator('.headword').first()).toHaveText('読む');
@@ -116,7 +117,7 @@ test('pinning a match, adding it to the mini-SRS queue, and reviewing it works e
 
   const target = await locateChar(page, '#text', '読みました');
   await page.mouse.move(target.x, target.y - 50);
-  await hoverWithShiftUntilVisible(page, target);
+  await hoverUntilVisible(page, target, 'Shift');
 
   // Click to pin (still holding Shift, as the content script requires).
   await page.mouse.click(target.x, target.y);
@@ -159,7 +160,7 @@ test('the "+ Anki" button fails gracefully (not a hang or a crash) when AnkiConn
 
   const target = await locateChar(page, '#text', '読みました');
   await page.mouse.move(target.x, target.y - 50);
-  await hoverWithShiftUntilVisible(page, target);
+  await hoverUntilVisible(page, target, 'Shift');
 
   await page.mouse.click(target.x, target.y);
   await page.keyboard.up('Shift');
@@ -186,7 +187,7 @@ test('click-to-pin does not hijack a real link click', async ({ context, demoUrl
 
   const target = await locateChar(page, '#link', '猫');
   await page.mouse.move(target.x, target.y - 50);
-  await hoverWithShiftUntilVisible(page, target); // 猫 ("cat") is a real dictionary word, so a popup is expected here too
+  await hoverUntilVisible(page, target, 'Shift'); // 猫 ("cat") is a real dictionary word, so a popup is expected here too
 
   // Holding Shift while clicking a link is itself a native browser gesture
   // (open in a new window) - unrelated to this extension, but it means a
@@ -219,7 +220,7 @@ test('clicking anywhere outside the pinned popup closes it, the same as Escape',
 
   const target = await locateChar(page, '#text', '読みました');
   await page.mouse.move(target.x, target.y - 50);
-  await hoverWithShiftUntilVisible(page, target);
+  await hoverUntilVisible(page, target, 'Shift');
 
   // Click to pin (still holding Shift, as the content script requires).
   await page.mouse.click(target.x, target.y);
@@ -233,4 +234,57 @@ test('clicking anywhere outside the pinned popup closes it, the same as Escape',
   const elsewhere = page.locator('#elsewhere');
   await elsewhere.click();
   await expect(page.locator('.headword').first()).toBeHidden();
+});
+
+test('Alt+hover activates the lookup when activationMode is set to "alt", and Shift no longer does', async ({
+  context,
+  extensionId,
+  demoUrl,
+}) => {
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+  await options.click('#activation-segmented button[data-mode="alt"]');
+  await options.waitForTimeout(300);
+  await options.close();
+
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverUntilVisible(page, target, 'Alt');
+  await page.keyboard.up('Alt');
+  await expect(page.locator('.headword').first()).toHaveText('読む');
+
+  // Move away, then back with Shift instead - isActivationHeld() must reject
+  // it now that the configured mode is 'alt', confirming the setting itself
+  // (not some unrelated always-on behavior) is what made the hover above work.
+  await page.mouse.move(target.x, target.y - 50);
+  await page.waitForTimeout(300);
+  await page.keyboard.down('Shift');
+  await page.mouse.move(target.x, target.y, { steps: 5 });
+  await page.waitForTimeout(500);
+  await expect(page.locator('.headword').first()).toBeHidden();
+  await page.keyboard.up('Shift');
+});
+
+test('hovering with no modifier key activates the lookup when activationMode is set to "always"', async ({
+  context,
+  extensionId,
+  demoUrl,
+}) => {
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+  await options.click('#activation-segmented button[data-mode="always"]');
+  await options.waitForTimeout(300);
+  await options.close();
+
+  const page = await context.newPage();
+  await page.goto(demoUrl);
+
+  const target = await locateChar(page, '#text', '読みました');
+  await page.mouse.move(target.x, target.y - 50);
+  await hoverUntilVisible(page, target, null); // no key held at all
+
+  await expect(page.locator('.headword').first()).toHaveText('読む');
 });
